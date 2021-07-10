@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<package format="2">
+    <name>georegistration_gazebo_ros</name>
+    <version>1.0.0</version>
+    <description>
+        Message and service data structures for interacting with Gazebo from ROS.
+    </description>
+
+    <maintainer email="arwillis@uncc.edu">Andrew Willis</maintainer>
+
+    <license>BSD</license>
+
+
+    <author>Andrew Willis</author>
+
+    <buildtool_depend>catkin</buildtool_depend>
+
+    <build_depend>cmake_modules</build_depend>
+    <depend>gazebo_msgs</depend>
+    <depend>georegistration_gazebo_msgs</depend>
+    <depend>roscpp</depend>
+    <depend>tf</depend>
+    <depend>std_srvs</depend>
+    <depend>std_msgs</depend>
+    <depend>geometry_msgs</depend>
+</package>
+
+
