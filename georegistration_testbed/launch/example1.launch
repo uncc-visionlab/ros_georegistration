@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<launch>
+    <arg name="run_rviz" default="true"/>
+    <!-- Setup coordinate TF frame structure is: 
+    map_frame -> initial_body_frame -> initial_optical_frame -> vo_frame -->
+    <arg name="map_frame" default="world" />
+    <arg name="body_frame" default="vehicle_frame" />
+    <arg name="nadir_cam_frame" default="nadir_cam" />    
+    <arg name="front_cam_frame" default="front_cam" />
+    
+    <arg name="rviz_config_file" default="georegistration_testbed.rviz"/>
+    <node pkg="rviz" type="rviz" name="rviz" output="screen" 
+          args="-d $(find georegistration_testbed)/rviz/$(arg rviz_config_file)" if="$(arg run_rviz)"/>
+      
+    <node name="map_to_base" pkg="tf" type="static_transform_publisher"  
+          args="0.0 0.0 1.0 0 0 0 1 $(arg map_frame) $(arg body_frame) 100" />
+
+    <node name="body_to_nadir_cam" pkg="tf" type="static_transform_publisher"  
+          args="0.0 0.0 -.10 0 1 0 0 $(arg body_frame) $(arg nadir_cam_frame) 100" />
+
+    <!-- <node name="body_to_front_cam" pkg="tf" type="static_transform_publisher"  
+          args=".30 0.0 -0.05  -0.5 0.5 -0.5 0.5 $(arg body_frame) $(arg front_cam_frame) 100" /> -->
+    <node name="body_to_front_cam" pkg="tf" type="static_transform_publisher"  
+          args=".30 0.0 -0.05  -0.653281482438188   0.653281482438188  -0.270598050073098 0.270598050073098 $(arg body_frame) $(arg front_cam_frame) 100" />    
+    
+    
+</launch>

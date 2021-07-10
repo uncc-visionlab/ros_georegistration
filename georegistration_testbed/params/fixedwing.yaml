@@ -1,0 +1,242 @@
+# Based on the My Twin Dream airframe (1.8m wingspan)
+mass: 3.92
+
+Jx: 0.213
+Jy: 0.171
+Jz: 0.350
+Jxz: 0.04
+
+rho: 1.2682
+wing_s: 0.468
+wing_b: 1.8
+wing_c: 0.26
+wing_M: 50
+wing_epsilon: 0.1592
+wing_alpha0: 0.3040363557
+
+k_motor: 30.0
+k_T_P: 0.0
+k_Omega: 0.0
+
+prop_e: 0.8
+prop_S: 0.0314
+prop_C: 1.0
+
+C_L_O: 0.2869
+C_L_alpha: 5.1378
+C_L_beta: 0.0
+C_L_p: 0.0
+C_L_q: 1.7102
+C_L_r: 0.0
+C_L_delta_a: 0.0
+C_L_delta_e: 0.5202
+C_L_delta_r: 0.0
+
+C_D_O: 0.03087
+C_D_alpha: 0.0043021
+C_D_beta: 0.0
+C_D_p: 0.02815
+C_D_q: 0.2514
+C_D_r: 0.0
+C_D_delta_a: 0.0
+C_D_delta_e: 0.01879
+C_D_delta_r: 0.0
+
+C_ell_O: 0.0
+C_ell_alpha: 0.00
+C_ell_beta: 0.0193
+C_ell_p: -0.5406
+C_ell_q: 0.0
+C_ell_r: 0.1929
+C_ell_delta_a: 0.2818
+C_ell_delta_e: 0.0
+C_ell_delta_r: 0.00096
+
+C_m_O: 0.0362
+C_m_alpha: -0.2627
+C_m_beta: 0.0
+C_m_p: 0.0
+C_m_q: -9.7213
+C_m_r: 0.0
+C_m_delta_a: 0.0
+C_m_delta_e: -1.2392
+C_m_delta_r: 0.0
+
+C_n_O: 0.0
+C_n_alpha: 0.0
+C_n_beta: 0.08557
+C_n_p: -0.0498
+C_n_q: 0.0
+C_n_r: -0.0572
+C_n_delta_a: 0.0095
+C_n_delta_e: 0.0
+C_n_delta_r: -0.06
+
+C_Y_O: 0.0
+C_Y_alpha: 0.00
+C_Y_beta: -0.2471
+C_Y_p: -0.07278
+C_Y_q: 0.0
+C_Y_r: 0.1849
+C_Y_delta_a: -0.02344
+C_Y_delta_e: 0.0
+C_Y_delta_r:  0.1591
+
+# trim conditions
+phi0: 0
+theta0: 0.0349 # 2 degrees
+psi0: 0
+Va0: 16.38
+delta_e0: 0.02967 # 1.7 degrees
+delta_t0: 0.4
+
+# =============================
+# ======= Plugin Params =======
+# =============================
+
+# Truth
+wind_speed_topic: "gazebo/wind_speed"
+truthTopic: "truth"
+
+# Forces and Moments
+windSpeedTopic: "wind"
+commandTopic: "command"
+
+# Sensor Noise Parameters (These are empirically-determined)
+gyro_stdev: 0.02
+gyro_bias_range:  0.25
+gyro_bias_walk_stdev: 0.00001
+
+acc_stdev: 0.19
+acc_bias_range: 0.6
+acc_bias_walk_stdev: 0.00001
+
+baro_stdev: 4.0
+baro_bias_range: 500
+baro_bias_walk_stdev: 0.1
+
+sonar_stdev: 0.03
+sonar_min_range: 0.25
+sonar_max_range: 8.0
+
+# TODO: update these with empirically-derived values
+airspeed_stdev: 1.15
+airspeed_bias_range: 0.15
+airspeed_bias_walk_stdev: 0.001
+
+
+## Sensor Noise Parameters (These are empirically-determined)
+#sonar_stdev: 0.03
+#sonar_min_range: 0.25
+#sonar_max_range: 8.0
+#
+#
+## GPS
+gps: {
+
+#noise_on: true,
+##topic: gps/data,
+#topic: gnss,
+#north_stdev: 0.21,
+#east_stdev: 0.21,
+#alt_stdev: 0.40,
+#velocity_stdev: 0.3,
+#k_north: 0.0009090909, # 1/1100
+#k_east: 0.0009090909, # 1/1100
+#k_alt: 0.0009090909, # 1/1100
+#rate: 10.0,
+initial_latitude: 30.474693,
+initial_longitude: -86.572972,
+initial_altitude: 11.0,
+num_sats: 7
+
+}
+
+# SAR
+sar: {
+noise_on: true,
+rate: 1.0,
+fix_topic: sar/fixtopic,
+#sar_camera_field_of_view_x: 30.0,
+#sar_camera_field_of_view_y: 30.0,
+sar_camera_focal_length: 0.012,
+sar_camera_fx: 110.0, 
+sar_camera_fy: 110.0, 
+sar_camera_resolution_x: 100,
+sar_camera_resolution_y: 100,
+#sar_camera_fx: 440.0, 
+#sar_camera_fy: 440.0, 
+#sar_camera_resolution_x: 400,
+#sar_camera_resolution_y: 400,
+sar_camera_view_topic: sar/camera_view,
+sar_image_topic: sar/image_raw,
+sar_truth_image_topic: sar/truth/image_raw,
+ground_plane_model_name: ground_plane,
+#sar_texture_filename: /home/arwillis/NetBeansProjects/ROS_SARGeoregistration/ros_ws/src/rosgeoregistration/georegistration_testbed/models/AFRL_RWWI_SATELLITE/sat_sentinel-1-grd_-86.501005E_30.4804199957W_111319.490793m.png,
+#sar_texture_filename: /home/arwillis/NetBeansProjects/ROS_SARGeoregistration/ros_ws/src/rosgeoregistration/georegistration_testbed/models/CONCORD_SATELLITE/sat_sentinel-1-grd_-80.535865E_35.39569711W_111319.490793m.png,
+#sar_texture_filename: /home/arwillis/NetBeansProjects/ROS_SARGeoregistration/ros_ws/src/rosgeoregistration/georegistration_testbed/models/EGLIN_LIDAR_RANGE_SATELLITE/sat_sentinel-1-grd_-86.436442E_30.5632921348W_111319.490793m.png,
+#sar_texture_filename: /home/arwillis/NetBeansProjects/ROS_SARGeoregistration/ros_ws/src/rosgeoregistration/georegistration_testbed/models/ESTES_PARK_CO_SATELLITE/sat_sentinel-1-grd_-105.65672E_40.413872091W_111319.490793m.png,
+#sar_texture_filename: /home/arwillis/NetBeansProjects/ROS_SARGeoregistration/ros_ws/src/rosgeoregistration/georegistration_testbed/models/KREMMLING_CO_SATELLITE/sat_sentinel-1-grd_-106.398358E_40.2304160993W_111319.490793m.png,
+#sar_texture_filename: /home/arwillis/NetBeansProjects/ROS_SARGeoregistration/ros_ws/src/rosgeoregistration/georegistration_testbed/models/UF_REEF_SATELLITE/sat_sentinel-1-grd_-86.572972E_30.4746875474W_111319.490793m.png,
+#sar_texture_filename: /home/arwillis/NetBeansProjects/ROS_SARGeoregistration/ros_ws/src/rosgeoregistration/georegistration_testbed/models/UNCC_EPIC_SATELLITE/sat_sentinel-1-grd_-80.741692E_35.309000385W_111319.490793m.png,
+north_stdev: 0.21,
+east_stdev: 0.21,
+alt_stdev: 0.40,
+velocity_stdev: 0.1,
+k_north: 0.0009090909, # 1/1100
+k_east: 0.0009090909, # 1/1100
+k_alt: 0.0009090909, # 1/1100
+initial_latitude: 40.267320,
+initial_longitude: -111.635629,
+initial_altitude: 1387.0,
+num_sats: 7
+}
+
+#
+## TODO: update these with empirically-derived values
+#airspeed_stdev: 1.15
+#airspeed_bias_range: 0.15
+#airspeed_bias_walk_stdev: 0.001
+#
+## airspeed
+#airspeed: {
+#
+#airspeed_topic: airspeed,
+#pressure_bias: 0,
+#pressure_noise_sigma: 0,
+#air_density: 1.225,
+#max_pressure: 4000,
+#min_pressure: 0
+#
+#}
+#
+## IMU
+#imu: {
+#
+#noise_on: true,
+#rate: 250,
+#topic: imu/data,
+#gyro_bias_topic: imu/gyro_bias,
+#acc_bias_topic: imu/acc_bias,
+#gyro_stdev: 0.02,
+#gyro_bias_range:  0.25,
+#gyro_bias_walk_stdev: 0.00001,
+#acc_stdev: 0.19,
+#acc_bias_range: 0.6,
+#acc_bias_walk_stdev: 0.00001
+#
+#}
+#
+#baro_stdev: 4.0
+#baro_bias_range: 500
+#baro_bias_walk_stdev: 0.1
+#
+## Barometer
+#barometer: {
+#
+#noise_on: true,
+#topic: baro/data,
+#rate: 50.0,
+#stdev: 0.1
+#
+#}

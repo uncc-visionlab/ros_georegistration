@@ -1,0 +1,94 @@
+<?xml version="1.0"?>
+<robot name="sar_plugin" xmlns:xacro="http://ros.org/wiki/xacro">
+
+    <xacro:property name="M_PI" value="3.1415926535897931" />
+    
+    <!-- horizontal and vertical image resolution (pixels) -->
+    <xacro:property name="horz_res" value="1920" />
+    <xacro:property name="vert_res" value="1080" />
+
+    <!-- horizontal field of view (degrees) -->
+    <xacro:property name="horz_fov" value="45" />
+
+    <!-- Macro to add a SAR module. -->
+    <xacro:macro name="sar_plugin_macro" 
+                 params="
+                        namespace
+                        parent_link
+                        xyz
+                        rpy
+                        ">
+        <!--<gazebo reference="${namespace}_sar_optical_frame">
+            <provideFeedback>true</provideFeedback>
+            <disableFixedJointLumping>true</disableFixedJointLumping>
+        </gazebo>-->
+        
+        <joint name="${parent_link}_to_sar_optical" type="revolute">
+            <parent link="${parent_link}"/>
+            <child link="${namespace}/sar_optical_frame"/>
+            <!-- <origin rpy="${-M_PI/2} 0 ${-M_PI/2}" xyz="0.0 0.0 0.0"/> -->
+            <!-- 3.14159 0 1.570796" xyz="0.0 0.0 0.5 -->
+            <origin xyz="${xyz}" rpy="${rpy}"/>
+            <limit velocity="6.5" effort="1000" lower="0" upper="0" />
+        </joint>          
+
+        <link name="${namespace}/sar_optical_frame" type="fixed">
+            <limit velocity="6.5" effort="1000" lower="0" upper="0" />
+            <collision>       
+                <origin xyz="0 0 0" rpy="0 0 0" />
+                <geometry>
+                    <mesh  scale="1 1 1" filename="package://georegistration_testbed/models/imSAR-nsp-3/imSAR-nsp-3.dae"/>
+                </geometry>
+            </collision>
+            <visual>
+                <origin xyz="0 0 0" rpy="0 0 0" />
+                <geometry>
+                    <mesh  scale="1 1 1" filename="package://georegistration_testbed/models/imSAR-nsp-3/imSAR-nsp-3.dae"/>
+                </geometry>
+            </visual>
+            <inertial>
+                <mass    value="0.001" />
+                <origin  xyz="0 0 0" rpy="0 0 0" />
+                <inertia ixx="0.0001" ixy="0" ixz="0" iyy="0.0001" iyz="0" izz="0.0001" />
+            </inertial>
+        </link>
+        <!--
+        <gazebo reference="${namespace}_sar_optical_frame">
+            <sensor name="${namespace}_imsar_radar_sensor" type="camera">
+                <update_rate>1.0</update_rate>
+                <camera>
+                    <pose>0.0 0.0 0.0 0 0 0</pose>
+                    <horizontal_fov>${horz_fov * M_PI/180.0}</horizontal_fov>
+                    <image>
+                        <format>R8G8B8</format>
+                        <width>${horz_res}</width>
+                        <height>${vert_res}</height>
+                    </image>
+                    <clip>
+                        <near>0.01</near>
+                        <far>1000</far>
+                    </clip>
+                    <noise>
+                        <type>gaussian</type>
+                        <mean>0.0</mean>
+                        <stddev>0.007</stddev>
+                    </noise>          
+                </camera>
+
+                <plugin name="${namespace}_SAR" filename="libSAR_plugin.so">
+                    <namespace>${namespace}</namespace>
+                    <linkName>${parent_link}</linkName>
+                
+                </plugin>-
+            </sensor>
+        </gazebo>-->
+        <!-- Load Plugin -->
+        <gazebo>
+            <plugin filename="libSAR_plugin.so" name="${namespace}_SAR">
+                <namespace>${namespace}</namespace>
+                <linkName>${parent_link}</linkName>
+                <frameName>${namespace}_sar_optical_frame</frameName>
+            </plugin>
+        </gazebo>
+    </xacro:macro>
+</robot>

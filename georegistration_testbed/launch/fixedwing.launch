@@ -1,0 +1,195 @@
+<!-- This is a launch file that runs the bare minimum requirements to get -->
+<!-- gazebo running for a fixed-wing aircraft -->
+
+<launch>
+    <arg name="mav_name"            default="fixedwing"/>
+
+    <arg name="run_rviz"            default="true"/>
+    <arg name="wait_param"          default="--wait"/>     
+    
+    <!-- UAV initial (X, Y, Z) position -->
+    <arg name="pos_x" default = "0.0"/>
+    <arg name="pos_y" default = "0.0"/>
+    <arg name="pos_z" default = "500"/>
+    <!-- UAV initial (roll, pitch, yaw) orientation in degrees -->
+    <arg name="roll"  default = "0.0"/>
+    <arg name="pitch" default = "0.0"/>
+    <arg name="yaw"   default = "0.0"/>  
+        
+    <!-- Setup coordinate TF frame structure -->
+    <arg name="map_frame" default="world" />
+
+    <arg name="rviz_config_file" default="georegistration_testbed.rviz"/>
+    <node pkg="rviz" type="rviz" name="rviz" output="screen" 
+          args="-d $(find georegistration_testbed)/rviz/$(arg rviz_config_file)" if="$(arg run_rviz)"/>
+
+    <!-- PLACE AIRFRAME MODEL IN WORLD WITH ASSIGNED POSE SECTION -->
+    <arg name="M_PI"      value="3.1415926535897931" />
+    <arg name="roll_rad"  value="$(eval arg('roll')* arg('M_PI') / 180.0)"/>
+    <arg name="pitch_rad" value="$(eval arg('pitch')* arg('M_PI') / 180.0)"/>
+    <arg name="yaw_rad"   value="$(eval arg('yaw')* arg('M_PI') / 180.0)"/>
+    <node name="map_to_base_link" pkg="tf" type="static_transform_publisher"  
+          args="$(arg pos_x) $(arg pos_y) $(arg pos_z) $(arg yaw_rad) $(arg pitch_rad) $(arg roll_rad) $(arg map_frame) $(arg mav_name)/base_link 100" />
+        
+    <!-- PUBLISH AIRFRAME MODEL TF FRAMES TO RVIZ SECTION -->
+    <!--<node pkg="robot_state_publisher" type="robot_state_publisher" name="robot_state_publisher">
+        <param name="publish_frequency" type="double" value="30.0" />
+    </node>-->
+
+    <!-- GAZEBO WORLD SELECTION SECTION -->
+    <arg name="GAZEBO_WORLD_FILE_A" default="$(find georegistration_testbed)/worlds/world_01.world"/>
+    <arg name="GAZEBO_WORLD_FILE_B" default="$(find georegistration_testbed)/worlds/world_02.world"/>    
+    <arg name="GAZEBO_WORLD_FILE_C" default=""/>
+    <arg name="world_file" default="$(arg GAZEBO_WORLD_FILE_A)"/>
+
+    <!-- GAZEBO LAUNCH SECTION -->
+    <include file="$(find gazebo_ros)/launch/empty_world.launch">
+        <arg name="paused" value="true"/>
+        <arg name="gui" value="true"/>
+        <arg name="verbose" value="true"/>
+        <arg name="debug" value="false"/>
+        <arg name="use_sim_time" value="false"/>        
+        <arg name="world_name" value="$(arg world_file)"/>
+        <!--<arg name="extra_gazebo_args" default="-s libgeoregistration_gazebo_ros_api_plugin.so"/>-->
+    </include>
+
+    <!-- Load Global Parameters for this MAV -->
+    <!--<rosparam command="load" file="$(find rosplane_sim)/params/$(arg mav_name).yaml" ns="$(arg mav_name)"/>-->
+    <rosparam command="load" file="$(find georegistration_testbed)/params/$(arg mav_name).yaml" ns="$(arg mav_name)"/>
+
+    <arg name="SAR_REFERENCE_IMAGE_FILE_A" default="$(find georegistration_testbed)/models/UNCC_EPIC_SATELLITE/sat_sentinel-1-grd_-80.741692E_35.309000385W_111319.490793m.png"/>
+    <arg name="SAR_REFERENCE_IMAGE_FILE_B" default="$(find georegistration_testbed)/models/ISLETA_PUEBLO_SATELLITE/sat_sentinel-1-grd_34.8487704863N_-106.492639E_111319.490793m.png"/>
+    <arg name="SAR_REFERENCE_IMAGE_FILE_C" default="$(find georegistration_testbed)/models/CONCORD_SATELLITE/sat_sentinel-1-grd_35.39569711N_-80.535865E_111319.490793m.png"/>
+    <arg name="SAR_REFERENCE_IMAGE_FILE_D" default="$(find georegistration_testbed)/models/ALBUQUERQUE_SATELLITE/sat_sentinel-1-grd_35.3171314418N_-106.844806E_111319.490793m.png"/>
+
+    <arg name="NAIP_REFERENCE_IMAGE_FILE_A" default="$(find georegistration_testbed)/models/UNCC_EPIC_SATELLITE/sat_sentinel-1-grd_-80.741692E_35.309000385W_111319.490793m.png"/>
+    <arg name="NAIP_REFERENCE_IMAGE_FILE_B" default="$(find georegistration_testbed)/models/ISLETA_PUEBLO_SATELLITE/sat_usda_naip_34.8487704863N_-106.492639E_111319.490793m.png"/>
+    <arg name="NAIP_REFERENCE_IMAGE_FILE_C" default="$(find georegistration_testbed)/models/CONCORD_SATELLITE/sat_usda_naip_35.39569711N_-80.535865E_111319.490793m.png"/>
+    <arg name="NAIP_REFERENCE_IMAGE_FILE_D" default="$(find georegistration_testbed)/models/ALBUQUERQUE_SATELLITE/sat_usda_naip_35.3171314418N_-106.844806E_111319.490793m.png"/>
+
+    <arg name="GMAPS_REFERENCE_IMAGE_FILE_A" default="$(find georegistration_testbed)/models/UNCC_EPIC_SATELLITE/satellite_-80.741692E_35.309003N_6400x_6150y_7643m_EW_7345m_NS.png"/>
+    <arg name="GMAPS_REFERENCE_IMAGE_FILE_B" default="$(find georegistration_testbed)/models/ISLETA_PUEBLO_SATELLITE/satellite_-106.492639E_34.848778N_10880x_10455y_12994m_EW_12486m_NS.png"/>
+    <arg name="GMAPS_REFERENCE_IMAGE_FILE_C" default="$(find georegistration_testbed)/models/CONCORD_SATELLITE/satellite_-80.535865E_35.395703N_9600x_9225y_11465m_EW_11017m_NS.png"/>
+    <arg name="GMAPS_REFERENCE_IMAGE_FILE_D" default="$(find georegistration_testbed)/models/ALBUQUERQUE_SATELLITE/satellite_-106.844806E_35.317139N_10880x_10455y_12994m_EW_12486m_NS.png"/>
+    
+    <!-- SELECT THE ONBOARD GEO-REFERENCED IMAGE AS ONBOARD_REFERENCE_IMAGE -->
+    <arg name="ONBOARD_REFERENCE_IMAGE" default="$(arg GMAPS_REFERENCE_IMAGE_FILE_B)"/>
+    <!-- SELECT THE SENSOR SOURCE IMAGE FOR SIMULATED IMAGE DATA AS SENSOR_REFERENCE_IMAGE -->
+    <arg name="SENSOR_REFERENCE_IMAGE" default="$(arg SAR_REFERENCE_IMAGE_FILE_B)"/>
+    <rosparam param="sar/sar_texture_filename" subst_value="True" ns="$(arg mav_name)">$(arg SENSOR_REFERENCE_IMAGE)</rosparam>
+
+    <!-- Spawn MAV -->
+    <include file="$(find georegistration_testbed)/launch/spawn_mav.launch">
+        <arg name="mav_name"            value="$(arg mav_name)" />
+        <arg name="model"               value="$(find georegistration_testbed)/xacro/$(arg mav_name).xacro" />
+        <arg name="pos_x" value="$(arg pos_x)"/>
+        <arg name="pos_y" value="$(arg pos_y)"/>
+        <arg name="pos_z" value="$(arg pos_z)"/>
+        <arg name="roll"  value="$(arg roll)"/>
+        <arg name="pitch" value="$(arg pitch)"/>
+        <arg name="yaw"   value="$(arg yaw)"/>    
+    </include>
+    <!--<include file="$(find rosplane_sim)/launch/spawn_mav.launch">
+        <arg name="mav_name"            value="$(arg mav_name)" />
+        <arg name="model"               value="$(find rosplane_sim)/xacro/$(arg mav_name).xacro" />   
+        <arg name="x" default="0.0"/>
+        <arg name="y" default="0.0"/>
+        <arg name="z" default="0.1"/>
+        <arg name="yaw" default="0.0"/>
+    </include>-->
+          
+    <!-- re-publish gazebo's truth odom from nav_msgs/Odometry to TF as tfparent_frame -> tfchild_frame in the TF tree -->
+    <node pkg="setpoint_publisher" type="republish_topic2tf" name="truthpose2tf" output="screen">
+        <param name="tfparent_frame" value="$(arg map_frame)"/>
+        <param name="tfchild_frame" value="pose_truth_tf"/>
+        <param name="topic" value="$(arg mav_name)/gazebo_truth"/>   
+        <param name="rate" value="5"/>   
+        <!-- topictype is either "TransformStamped" (having type geometry_msgs/TransformStamped)
+        or "Odometry" (having type nav_msgs/Odometry) -->
+        <param name="topictype" value="Odometry"/>   
+    </node>
+
+    <group ns="$(arg mav_name)">
+        <!-- ROS interface rosflight_io -->
+        <!--<node name="rosflight_io" pkg="rosflight" type="rosflight_io" output="screen">
+            <param name="udp" value="true"/>
+        </node>-->
+
+        <!-- Status Publisher -->
+        <!-- Must publish a status: armed to estimate states -->
+        <node pkg="rostopic" type="rostopic" name="status_pub" 
+              args="pub -r 1 status rosflight_msgs/Status '{armed: true, failsafe: false, rc_override: false, offboard: true, error_code: 0, num_errors: 0, loop_time_us: 1}'"/>
+        <!--<node name="status_publisher" pkg="rostopic" type="rostopic" output="screen"
+                args="pub status rosflight_msgs/Status '{header: {seq: 0, stamp: 0, frame_id: 'none'}, 
+        armed: 'true', failsafe: 'false', rc_override: 'false', offboard: 'false', 
+        control_mode: 0, error_code: 0, num_errors: 0, loop_time_us: 0}'"/>-->
+
+        <!--<node pkg="rosservice" type="rosservice" name="load_control_params" 
+        args="call $(arg wait_param) /$(arg mav_name)/param_load_from_file $(find rosplane)/param/bixler.yaml" />-->
+
+        <node pkg="rosservice" type="rosservice" name="calibrate_imu" 
+              args="call $(arg wait_param) /fixedwing/calibrate_imu" launch-prefix="bash -c 'sleep 7; $0 $@' "/>
+
+        <node pkg="rosservice" type="rosservice" name="calibrate_baro" 
+              args="call $(arg wait_param) /fixedwing/calibrate_baro" launch-prefix="bash -c 'sleep 5; $0 $@' "/>
+
+        <node pkg="rosservice" type="rosservice" name="set_mixer" 
+              args="call $(arg wait_param) /fixedwing/param_set MIXER 1" launch-prefix="bash -c 'sleep 6; $0 $@' "/>
+
+        <!-- Node for RC from a joystick to implement safety pilot override -->
+        <!--<node name="safety_pilot" pkg="rosflight_utils" type="rc_joy"/>-->
+
+        <node name="autopilot" pkg="rosplane" type="rosplane_controller" launch-prefix="bash -c 'sleep 10; $0 $@'">
+            <!--<remap from="state" to="truth"/>-->
+        </node>
+
+        <node name="estimator" pkg="rosplane" type="rosplane_estimator" output="screen"/>
+        
+        <node name="pathfollower" pkg="rosplane" type="rosplane_path_follower">
+            <!--<remap from="state" to="truth"/>-->
+        </node>
+
+        <!-- <node name="current_path_publisher" pkg="rostopic" type="rostopic"
+        args="pub current_path rosplane_msgs/Current_Path '0' '15.0'  '[0.0, 0.0, -100.0]'  '[1.0, 0.0, 0.0]'  '[0.0, 0.0, -100.0]'  '100.0' '1'"/> -->
+
+        <!--<node name="current_path_publisher" pkg="rostopic" type="rostopic"
+        args="pub current_path rosplane_msgs/Current_Path '1' '15.0'  '[0.0, 0.0, -100.0]'  '[1.0, 0.0, 0.0]'  '[0.0, 0.0, -100.0]'  '25.0' '-1'"/> -->
+
+        <node name="pathmanager" pkg="rosplane" type="rosplane_path_manager" output="screen">
+            <!--<remap from="state" to="truth"/>-->
+        </node>
+
+        <node name="pathplanner" pkg="rosplane" type="rosplane_path_planner" launch-prefix="bash -c 'sleep 10; $0 $@' "/>
+
+        <!-- Throttle for camera framerates -->
+        <arg name="camera_framerate_hz" value="1"/>
+        <node name="nadir_camera_throttler" type="throttle" pkg="topic_tools" 
+              args="messages camera/nadir/image_raw $(arg camera_framerate_hz) camera/nadir/image_raw_throttled" />
+
+        <!-- Image registration -->
+        <arg name="base_path" value="$(find georegistration_testbed)/models"/>
+        <node name="image_registration_node" pkg="georegistration_testbed" type="image_registration_node.py" output="screen">
+            <remap from="camera/image_raw"   to="camera/nadir/image_raw_throttled"/>
+            <remap from="sar/image_raw"   to="sar/image_raw"/>
+            <remap from="camera/camera_info" to="camera/nadir/camera_info"/>
+            <!-- name of the SDF model of the ground plane-->
+            <!-- used to extract metric information regarding the plane from the gazebo_ros extension library -->
+            <param name="model_name" value="ground_plane"/>
+
+            <!-- UF REEF -->
+            <!-- <param name="reference_image" value="$(arg base_path)/UF_REEF_SATELLITE/satellite_-86.572972E_30.474693N_10880x_10455y_1560m_1624m.png"/>-->
+            <!-- CONCORD -->
+            <!--<param name="reference_image" value="$(arg base_path)/CONCORD_SATELLITE/satellite_-80.535865E_35.395703N_10880x_10455y_1560m_1624m.png"/>-->
+            <!-- UNCC EPIC -->
+            <!--<param name="reference_image" value="$(arg base_path)/UNCC_EPIC_SATELLITE/satellite_-80.741692E_35.309003N_6400x_6150y_7643m_EW_7345m_NS.png"/> -->
+            <!--<param name="rgb_sensor_image" value="$(arg base_path)/UNCC_EPIC_SATELLITE/satellite_-80.741692E_35.309003N_6400x_6150y_7643m_EW_7345m_NS.png"/> -->
+            <param name="reference_image" value="$(arg ONBOARD_REFERENCE_IMAGE)"/>
+            <param name="rgb_sensor_image" value="$(arg ONBOARD_REFERENCE_IMAGE)"/>
+            <param name="model_size_x" value="7643"/>
+            <param name="model_size_y" value="7345"/>
+            <!-- Detector and extractor params -->
+            <param name="ALGORITHM_DETECT" value="ORB"/>
+            <param name="ALGORITHM_EXTRACT" value="ORB"/>
+        </node>
+    </group>
+</launch>

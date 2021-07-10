@@ -1,0 +1,91 @@
+<sdf version='1.6'>
+  <world name='default'>
+    <plugin name="geometry_size" filename="libModelSizePlugin.so"/>
+    <light name='sun' type='directional'>
+      <cast_shadows>1</cast_shadows>
+      <pose frame=''>0 0 10 0 -0 0</pose>
+      <diffuse>1 1 1 1</diffuse>
+      <specular>0.0 0.0 0.0 1</specular>
+      <attenuation>
+        <range>1000</range>
+        <constant>0.9</constant>
+        <linear>0.01</linear>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+      <direction>-0.5 0.5 -1</direction>
+    </light>
+    <include>
+        <uri>model://UNCC_EPIC_SATELLITE/</uri>
+    </include>
+    <!-- <include>
+        <uri>model://UF_REEF_SATELLITE_1m/</uri>
+    </include>-->
+    <!--<include>
+        <uri>model://imSAR-nsp-3/</uri>
+    </include>-->
+
+    <!--<include>
+        <uri>model://UF_REEF_SATELLITE/</uri>
+    </include>-->
+    <!--<include>
+        <uri>model://CONCORD_SATELLITE/</uri>
+    </include>-->
+    <!--<include>
+        <uri>model://UNCC_EPIC_SATELLITE/</uri>
+    </include>-->
+
+    <!--<plugin name="map" filename="libStaticMapPlugin.so">
+      <center>37.386491 -122.065255</center>
+      <world_size>100</world_size>
+      <map_type>satellite</map_type>
+      <api_key>AIzaSyCybFjHOuFpWLzNdH9wtAjFUh25qTYfZoI</api_key>
+      <use_cache>false</use_cache>
+    </plugin>-->
+    <gravity>0 0 -9.81</gravity>
+    <magnetic_field>6e-06 2.3e-05 -4.2e-05</magnetic_field>
+    <atmosphere type='adiabatic'/>
+    <physics name='default_physics' default='0' type='ode'>
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1</real_time_factor>
+      <real_time_update_rate>1000</real_time_update_rate>
+    </physics>
+    <scene>
+      <ambient>1 1 1 1</ambient>
+      <background>0.25 0.25 0.25 1</background>
+      <shadows>false</shadows>
+    </scene>
+    <spherical_coordinates>
+      <surface_model>EARTH_WGS84</surface_model>
+      <latitude_deg>0</latitude_deg>
+      <longitude_deg>0</longitude_deg>
+      <elevation>0</elevation>
+      <heading_deg>0</heading_deg>
+    </spherical_coordinates>
+    <state world_name='default'>
+      <sim_time>255 727000000</sim_time>
+      <real_time>0 0</real_time>
+      <wall_time>1528740849 457055813</wall_time>
+      <iterations>0</iterations>
+      <!--<model name='ground_plane'>
+        <pose frame=''>0 0 0 0 0 0</pose>
+        <scale>1 1 1</scale>
+        <link name='link'>
+          <pose frame=''>0 0 0 0 -0 0</pose>
+          <velocity>0 0 0 0 -0 0</velocity>
+          <acceleration>0 0 0 0 -0 0</acceleration>
+          <wrench>0 0 0 0 -0 0</wrench>
+        </link>
+      </model>-->
+      <light name='sun'>
+        <pose frame=''>0 0 1000 0 -0 0</pose>
+      </light>
+    </state>
+    <gui fullscreen='0'>
+      <camera name='user_camera'>
+        <pose frame=''>-39.74 -48.284 56.8504 0 0.678029 0.503469</pose>
+        <view_controller>orbit</view_controller>
+        <projection_type>perspective</projection_type>
+      </camera>
+    </gui>
+  </world>
+</sdf>

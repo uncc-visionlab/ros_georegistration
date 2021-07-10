@@ -1,0 +1,151 @@
+<?xml version="1.0"?>
+
+<robot name="fixedwing" xmlns:xacro="http://ros.org/wiki/xacro">
+    <!-- Properties -->
+    <xacro:property name="namespace" value="$(arg mav_name)"/>
+    <xacro:property name="wind_speed_topic" value="gazebo/wind_speed"/>
+    <xacro:property name="command_topic" value="command"/>
+    <xacro:property name="mesh_file" value="model://fixedwing/fixedwing.dae"/>
+    <xacro:property name="body_width" value="1.54"/>
+    <xacro:property name="body_height" value="0.77" />
+    <xacro:property name="body_length" value="0.20"/>
+    <xacro:property name="mass" value="1.5"/>
+    <xacro:property name="Jx" value="0.1147"/>
+    <xacro:property name="Jy" value="0.0576"/>
+    <xacro:property name="Jz" value="0.1712"/>
+    <xacro:property name="Jxz" value="0.0015"/>
+    
+    <!-- Property Blocks -->
+    <xacro:property name="empty_inertia">
+        <inertia ixx="0.0001" ixy="0.0" ixz="0.0" iyy="0.0001" iyz="0.0" izz="0.001" />
+    </xacro:property>
+
+    <!-- Instantiate Link and Visual -->
+    <link name="${namespace}/base_link">
+        <inertial>
+            <mass value="${mass}" />
+            <origin xyz="0 0 0" />
+            <inertia ixx="${Jx}" ixy="0.00" ixz="${Jxz}" iyy="${Jy}" iyz="0.00" izz="${Jz}" />
+        </inertial>
+        <visual name="plane_visual">
+            <origin xyz="0 0 0" rpy="0 0 1.570796" />
+            <geometry>
+                <mesh filename="${mesh_file}">
+                    <submesh name="Wing" center="true" />
+                </mesh>
+            </geometry>
+        </visual>
+        <collision name="plane_collision">
+            <origin xyz="0 0 0" rpy="0 0 1.570796" />
+            <geometry>
+                <box size="${body_width} ${body_height} ${body_length}" />
+            </geometry>
+        </collision>
+    </link>
+  
+    <!-- Simulator Ground Truth -->
+
+    <xacro:include filename="$(find rosplane_sim)/xacro/aircraft_truth.xacro"/>
+    <xacro:aircraft_truth namespace="${namespace}" parent_link="${namespace}/base_link"/>
+
+    <!-- Aerodynamics -->
+    <!-- ************************* FORCES AND MOMENTS ********************** -->
+
+    <xacro:include filename="$(find rosplane_sim)/xacro/aircraft_forces_and_moments.xacro"/>
+    <xacro:aircraft_dynamics namespace="${namespace}" parent_link="${namespace}/base_link"/>
+
+    <!-- ***************** SENSORS ******************* -->
+
+    <!-- GPS -->
+    <xacro:include filename="$(find rosflight_plugins)/xacro/GPS.xacro"/>
+    <xacro:gps_plugin_macro namespace="${namespace}" parent_link="${namespace}/base_link"/>
+
+    <!-- IMU -->
+    <xacro:include filename="$(find rosflight_plugins)/xacro/imu.xacro"/>
+    <xacro:imu_plugin_macro namespace="${namespace}" parent_link="${namespace}/base_link"/>
+
+    <!-- Barometer -->
+    <xacro:include filename="$(find rosflight_plugins)/xacro/barometer.xacro"/>
+    <xacro:barometer_plugin_macro namespace="${namespace}" parent_link="${namespace}/base_link"/>
+
+    <!-- Airspeed -->
+    <xacro:include filename="$(find rosflight_plugins)/xacro/airspeed.xacro"/>
+    <xacro:airspeed_plugin_macro namespace="${namespace}" parent_link="${namespace}/base_link"/>
+
+    <!-- SAR -->
+    <!-- SAR Properties -->
+    <!--<xacro:property name="model_name" value="$(arg model_name)"/>
+    <xacro:property name="texture_filename" value="$(arg texture_filename)"/>-->
+
+    <xacro:include filename="$(find georegistration_testbed)/xacro/sar.xacro"/>
+    <xacro:sar_plugin_macro namespace="${namespace}" 
+                            parent_link="${namespace}/base_link"
+                            xyz="0.0 0.0 0.5"
+                            rpy="0 ${M_PI/2} 0"/>
+                            <!--rpy="${M_PI} 0 ${M_PI/2}"-->
+<!--model_name="${model_name}"
+                            texture_filename="${texture_filename}"-->
+    <!-- Chase Camera -->
+    <!--<xacro:include filename="$(find magicc_sim_plugins)/xacro/camera.xacro"/>
+    <xacro:simple_camera
+      namespace="${namespace}/chase"
+      frame_rate="30"
+      rgb_range="1000"
+      parent_link="${namespace}/base_link"
+      image_topic="rgb"
+      image_camera_info_topic="camera_info">
+      <origin xyz="-${1.1*body_length} 0 ${0.8*body_height}"/>
+    </xacro:simple_camera>-->
+    
+    <!-- Gimbal -->
+    <!--<xacro:include filename="$(find magicc_sim_plugins)/xacro/gimbal.xacro"/>
+    <xacro:gimbal_ZENMUSE
+      namespace="${namespace}"
+      parent_link="${namespace}/base_link"
+      camera_topic="rgb"
+      frame_rate="30"
+      pose_topic="${namespace}/gimbal/pose"
+      command_topic="${namespace}/gimbal/control"
+      use_slipring="true">
+      <origin xyz="-${0.4*body_length} 0 -${0.4*body_height}" rpy="0 0 0"/>
+    </xacro:gimbal_ZENMUSE>-->
+
+    <xacro:include filename="$(find georegistration_testbed)/airframe_model/camera_plugin.urdf.xacro" />
+    <xacro:camera_plugin_macro 
+        name="nadir"
+        namespace="${namespace}"
+        parent_link="${namespace}/base_link" 
+        xyz="0.0 0.0 -${0.03*body_height}"
+        rpy="0 ${M_PI/2} 0"/>
+
+    <xacro:include filename="$(find georegistration_testbed)/airframe_model/camera_plugin.urdf.xacro" />
+    <xacro:camera_plugin_macro 
+        name="front"
+        namespace="${namespace}"
+        parent_link="${namespace}/base_link"
+        xyz="${1.4*body_length} 0 -${0.03*body_height}"
+        rpy="0 ${M_PI/4} 0"/>
+
+    <!-- publish ground truth pose -->
+    <gazebo>
+        <plugin name="ground_truth_odom" filename="libgazebo_ros_p3d.so">
+            <frameName>world</frameName>
+            <bodyName>${namespace}/base_link</bodyName>
+            <topicName>${namespace}/gazebo_truth</topicName>
+            <gaussianNoise>0.0</gaussianNoise>
+            <updateRate>30.0</updateRate>
+        </plugin>
+    </gazebo>
+    
+    <!-- gravity enable (1) or disable (0) -->
+    <!-- NOT WORKING!
+    <gazebo reference="base_link">
+        <gravity>0</gravity> 
+    </gazebo>
+    
+    <gazebo reference="base_link">
+        <material>Gazebo/Blue</material>
+        <turnGravityOff>true</turnGravityOff>
+    </gazebo> -->  
+
+</robot>

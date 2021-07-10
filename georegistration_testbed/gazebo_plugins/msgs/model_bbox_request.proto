@@ -1,0 +1,18 @@
+syntax = "proto2";
+package model_bbox_msgs.msgs;
+import "vector2d.proto";
+import "vector3d.proto";
+
+message ModelBoundingBoxRequest
+{
+  required string                 model_name = 1 [default = ""];
+  required string                 link_name  = 2 [default = ""];
+  optional gazebo.msgs.Vector2d   upperLeft  = 3;
+  optional gazebo.msgs.Vector3d   upperRight = 4;
+  optional gazebo.msgs.Vector2d   lowerRight = 5;
+  optional gazebo.msgs.Vector3d   lowerLeft  = 6;
+  optional double                 height     = 7;
+  optional double                 resolution = 8;
+  optional string                 filename   = 9 [default = ""];
+  optional int32                  threshold  = 10 [default = 255];
+}

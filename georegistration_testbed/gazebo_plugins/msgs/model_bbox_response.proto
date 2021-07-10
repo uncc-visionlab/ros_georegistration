@@ -1,0 +1,17 @@
+syntax = "proto2";
+package model_bbox_msgs.msgs;
+import "vector2d.proto";
+import "vector3d.proto";
+
+message ModelBoundingBoxResponse
+{
+  required string                 geom_name  = 1;
+  required gazebo.msgs.Vector3d   size       = 2;
+  required gazebo.msgs.Vector3d   scale      = 3;
+  required bool                   success    = 4;
+  required string                 status_msg = 5;
+  optional double                 height     = 6;
+  optional double                 resolution = 7;
+  optional string                 filename   = 8 [default = ""];
+  optional int32                  threshold  = 9 [default = 255];
+}

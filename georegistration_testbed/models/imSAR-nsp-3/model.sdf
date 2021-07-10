@@ -1,0 +1,96 @@
+<?xml version="1.0" ?>
+<sdf version="1.5">
+    <model name="imSAR-nsp3">
+        <static>true</static>
+        <link name="base">
+            <pose>0 0 0.029335 0 0 0</pose>
+            <inertial>
+                <mass>0.01</mass> <!-- invalid value -->
+                <inertia>
+                    <ixx>0.001087473</ixx>
+                    <iyy>0.001087473</iyy>
+                    <izz>0.001092437</izz>
+                    <ixy>0</ixy>
+                    <ixz>0</ixz>
+                    <iyz>0</iyz>
+                </inertia>
+            </inertial>
+            <collision name="collision">
+                <geometry>
+                    <box>
+                        <size>332 30 30</size>
+                    </box>
+                </geometry>
+                <surface>
+                    <friction>
+                        <ode>
+                            <mu>100</mu>
+                            <mu2>50</mu2>
+                        </ode>
+                    </friction>
+                </surface>
+            </collision>
+            <visual name="visual">
+                <cast_shadows>true</cast_shadows>
+                <geometry>
+                    <mesh>
+                        <uri>model://imSAR-nsp-3/imSAR-nsp-3.dae</uri>
+                    </mesh>
+                </geometry>
+                <!-- <material>
+                    <script>
+                        <uri>model://satellite_ground_plane/materials/ground_plane_satellite.material</uri>
+                        <name>Satellite/Image</name>
+                    </script>
+                </material> -->
+            </visual>
+            <gazebo>
+                <sensor type="radar" name="imsar_radar_sensor">
+                    <update_rate>30.0</update_rate>
+                    <camera>
+                        <pose>0.0 0.0 0.0 0 0 0</pose>
+                        <horizontal_fov>${horz_fov * M_PI/180.0}</horizontal_fov>
+                        <image>
+                            <format>R8G8B8</format>
+                            <width>${horz_res}</width>
+                            <height>${vert_res}</height>
+                        </image>
+                        <clip>
+                            <near>0.01</near>
+                            <far>1000</far>
+                        </clip>
+                        <noise>
+                            <type>gaussian</type>
+                            <!-- Noise is sampled independently per pixel on each frame.  
+                            That pixel's noise value is added to each of its color
+                            channels, which at that point lie in the range [0,1]. -->
+                            <mean>0.0</mean>
+                            <stddev>0.007</stddev>
+                        </noise>          
+                    </camera>
+
+                    <plugin name="${name}_camera_plugin" filename="libgazebo_ros_camera.so">
+                        <robotNamespace>${namespace}</robotNamespace>
+                        <alwaysOn>true</alwaysOn>
+                        <updateRate>0.0</updateRate>
+                        <cameraName>camera/${name}</cameraName>
+                        <imageTopicName>image_raw</imageTopicName>
+                        <cameraInfoTopicName>camera_info</cameraInfoTopicName>
+                        <frameName>${name}_gimbal_frame</frameName>
+                        <CxPrime>${horz_res/2 + 0.5}</CxPrime>
+                        <Cx>${horz_res/2 + 0.5}</Cx>
+                        <Cy>${vert_res/2 + 0.5}</Cy>
+                        <!-- Determined by field of view horizontal_fov above -->
+                        <!-- <focalLength>320.000101</focalLength> -->
+                        <hackBaseline>0.0</hackBaseline>
+                        <distortionK1>0.0</distortionK1>
+                        <distortionK2>0.0</distortionK2>
+                        <distortionK3>0.0</distortionK3>
+                        <distortionT1>0.0</distortionT1>
+                        <distortionT2>0.0</distortionT2>
+                    </plugin>
+                </sensor>
+            </gazebo>               
+        </link>        
+    </model>
+</sdf>
