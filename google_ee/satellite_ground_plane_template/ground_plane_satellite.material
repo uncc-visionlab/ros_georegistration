@@ -1,0 +1,20 @@
+material Satellite/Image
+{
+  technique
+  {
+    pass 
+    {
+      ambient .3 .3 .3  1.0
+      diffuse .7 .7 .7  1.0
+      specular 0.01 0.01 0.01 1.000000 1.500000
+
+      texture_unit
+      {
+        //texture satellite_reference_image.png
+        texture %TEXTURE_IMAGE_NAME%
+        // scale 0.01 0.01
+      }
+    }
+  }
+}
+

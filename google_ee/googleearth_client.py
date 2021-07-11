@@ -1,5 +1,30 @@
 #!/usr/bin/env python3
-
+# Install Google EarthEngine for python
+# pip install earthengine-api --upgrade
+# Install matplotlib
+# sudo apt-get install python-matplotlib
+# Install salem
+# pip install salem
+# Install pandas
+# sudo apt-get install python-pandas
+# Install pyproj
+# sudo apt-get install python-pyproj
+# Install netCDF4
+# pip install netCDF4
+# Install xarray
+# pip install xarray
+# Install shapely
+# pip install shapely
+# Install descartes
+# pip install descartes
+# Install imagetk
+# sudo apt-get install python-pil.imagetk
+# Install pykml
+# pip install pykml
+# Install geopandas
+# sudo apt-get install python-geopandas
+# Install motionless
+# pip install motionless
 import csv
 import datetime
 import matplotlib.pyplot as plt
@@ -11,6 +36,7 @@ from salem import get_demo_file, DataLevels, GoogleVisibleMap, Map
 from salem import GoogleCenterMap, gis, wgs84, utils
 
 import time
+import sys
 
 import ee
 import ee.geometry
@@ -21,8 +47,18 @@ import requests
 
 from pykml import parser
 from os import path
+import os
 
 import pyproj
+
+from osgeo import gdal
+from pydrive.auth import GoogleAuth
+from pydrive.drive import GoogleDrive
+import datetime
+import math
+
+from osgeo import gdal
+
 API_KEY = None
 
 class MapTiles:
@@ -142,7 +178,7 @@ def googlestatic_mercator_grid2(center_ll=None, nx=640, ny=640, zoom=12, scale=1
 
 class GoogleEarthClient():
 
-    def __init__(self):
+    def __init__(self,args):
 #        urlPath = image.getDownloadUrl({
 #                                    'scale': 30,
 #                                    'crs': 'EPSG:4326',
@@ -151,13 +187,14 @@ class GoogleEarthClient():
 #        print ("%s" %str(urlPath))
 #        print ("current path %s" %path.dirname(path.abspath(__file__)))
         
-        kml_file = path.join('./', 'J1_35580_STD_F373.kml')
+        #kml_file = path.join('./', 'J1_35580_STD_F373.kml')
 
-        with open(kml_file) as f:
-            doc = parser.parse(f)
-            print("doc %s" %str(doc))
+        #with open(kml_file) as f:
+        #    doc = parser.parse(f)
+        #    print("doc %s" %str(doc))
                 
-        shp = salem.read_shapefile('J1_35580_STD_F373-SHP/J1_35580_STD_F373-polygon.shp')
+        #shp = salem.read_shapefile('J1_35580_STD_F373-SHP/J1_35580_STD_F373-polygon.shp')
+        timePrefix = str(datetime.datetime.now().strftime('%Y_%m_%d_%H_%M_%S'))
         ufreef_input_params = { # UF REEF
             'latitude': 30.474693,   # degrees N
             'longitude': -86.572972, # degrees E
@@ -169,8 +206,8 @@ class GoogleEarthClient():
             'latitude': 35.395703,   # degrees N
             'longitude': -80.535865, # degrees E
             'modelname': 'CONCORD_SATELLITE',
-            'rows' : 10,
-            'columns': 10
+            'rows' : 15,
+            'columns': 15
         }
         uncc_epic_input_params = { # UNCC EPIC
             'latitude': 35.309003,   # degrees N
@@ -207,15 +244,105 @@ class GoogleEarthClient():
             'rows' : 17,
             'columns': 17
         }
+        albuquerque_input_params = { # Albuquerque
+            'latitude' : 35.317139,  # degrees N
+            'longitude': -106.844806,# degrees E
+            'modelname': 'ALBUQUERQUE_SATELLITE',
+            'rows' : 17,
+            'columns': 17
+        }
+        isleta_pueblo_input_params = { #Isleta Pueblo, near Albuquerque
+            'latitude' : 34.848778,   # degrees N
+            'longitude': -106.492639,  # degrees E
+            'modelname': 'ISLETA_PUEBLO_SATELLITE',
+            'rows' : 17,
+            'columns' : 17
+        }
+        if (args[1] == 'manual'):
+            satList = args[7:]
+            xLocation = float(args[3])
+            yLocation = float(args[2])
+            print("Latitude Coordinate: {} \nLongitude Coordinate: {}".format(yLocation,xLocation))
+            manual = {
+                'latitude' : yLocation, # degrees N
+                'longitude': xLocation, # degrees E
+                'modelname': 'RANDOM_SATELLITE',
+                'rows' : int(args[5]),
+                'columns' : int(args[4])
+            }
+            zoomChange = int(args[6])
+            pathPrefix = "Batch_Manual_"+timePrefix+"/"
+            os.mkdir(pathPrefix)
+            fileBatch = self.generateMaps(manual,satList,1,pathPrefix,zoomChange)
+            if (satList):
+                self.driveDownloader(fileBatch)
+        elif (args[1] == 'random'):
+            import random
+            satList = args[9:]
+            yRange = abs(float(args[2])-float(args[4]))
+            xRange = abs(float(args[3])-float(args[5]))
+            yLocation = float(args[2])-random.random()*yRange
+            xLocation = float(args[3])+random.random()*xRange
+            print("Latitude Coordinate: {} \nLongitude Coordinate: {}".format(yLocation,xLocation))
+            random = {
+                'latitude' : yLocation, # degrees N
+                'longitude': xLocation, # degrees E
+                'modelname': 'RANDOM_SATELLITE',
+                'rows' : int(args[7]),
+                'columns' : int(args[6])
+            }
+            zoomChange = int(args[8])
+            pathPrefix = "Batch_Random_"+timePrefix+"/"
+            os.mkdir(pathPrefix)
+            fileBatch = self.generateMaps(random,satList,1,pathPrefix,zoomChange)
+            if (satList):
+                self.driveDownloader(fileBatch)
+        elif (args[1] == 'randomMulti'):
+            import random
+            os.mkdir("Batch_Multi_"+timePrefix)
+            satList = args[10:]
+            fileBatch = []
+            zoomChange = int(args[8])
+            for idx in range(0,int(args[9])):
+                yRange = abs(float(args[2])-float(args[4]))
+                xRange = abs(float(args[3])-float(args[5]))
+                yLocation = float(args[2])-random.random()*yRange
+                xLocation = float(args[3])+random.random()*xRange
+                print("Latitude Coordinate: {} \nLongitude Coordinate: {}".format(yLocation,xLocation))
+                randomMulti = {
+                    'latitude' : yLocation, # degrees N
+                    'longitude': xLocation, # degrees E
+                    'modelname': 'RANDOM_SATELLITE',
+                    'rows' : int(args[7]),
+                    'columns' : int(args[6])
+                }
+                pathPrefix = "Batch_Multi_"+timePrefix+"/"+str(idx+1)+"/"
+                os.mkdir(pathPrefix)
+                temp = self.generateMaps(randomMulti,satList,idx,pathPrefix,zoomChange)
+                for file in temp:
+                    fileBatch.append(file)
+            if (satList):
+                self.driveDownloader(fileBatch)
+        # CHANGE LOCATIONS HERE
         #input_params = uncc_epic_input_params
         #input_params = willis_input_params
+        #input_params = albuquerque_input_params
         #input_params = eglin_lidar_range_input_params
         #input_params = kremmling_co_input_params
         #input_params = estes_park_co_input_params
         #input_params = afrl_rwwi_input_params
-        input_params = ufreef_input_params
+        #input_params = ufreef_input_params
+        #input_params = isleta_pueblo_input_params
+        #input_params = random
+        
+    def generateMaps(self,input_params,satList,setNumber,pathPrefix="",zoomChange=1):
+        drive = None
+        fileBatch = []
         CONSTRUCT_GAZEBO_PLANE_MODEL = True
-        CONSTRUCT_SAR_REFERENCE_IMAGE = True
+        if (not satList):
+            CONSTRUCT_SAR_REFERENCE_IMAGE = False
+        else:
+            CONSTRUCT_SAR_REFERENCE_IMAGE = True
         target_lon_lat = np.array([ input_params['longitude'],  input_params['latitude']])
         
         if (CONSTRUCT_GAZEBO_PLANE_MODEL == True):
@@ -223,13 +350,14 @@ class GoogleEarthClient():
             columns = input_params['columns']
             #rows = 17
             #columns = 17
-            imageParams = self.downloadGoogleSatellite(target_lon_lat[0], target_lon_lat[1], rows, columns)
-            self.writeGazeboModelAsTarfile(input_params['modelname'], imageParams)
+            imageParams = self.downloadGoogleSatellite(target_lon_lat[0], target_lon_lat[1], rows, columns,pathPrefix,zoomChange)
+            self.writeGazeboModelAsTarfile(input_params['modelname'], imageParams,pathPrefix)
 
         if (CONSTRUCT_SAR_REFERENCE_IMAGE == True and 'imageParams' in locals()):
             #ee.Authenticate()
             # read the shapefile and use its extent to define a ideally sized map
             ee.Initialize()
+            #gauth = GoogleAuth(settings_file='DRIVE_API/settings.yaml')
             #image = ee.Image('srtm90_v4')
             #print(image.getInfo())
             #uf_reef_geom = ee.Geometry.Point(target_lat_lon.tolist());
@@ -239,10 +367,13 @@ class GoogleEarthClient():
             eeRect_ptList = (imageParams['rect'][0], imageParams['rect'][2], imageParams['rect'][1], imageParams['rect'][3])
             target_geom = ee.Geometry.Rectangle(eeRect_ptList)
             #self.test_EEBatchToDrive(target_lat_lon_point_geom)
-            self.test_EEBatchToDrive(target_geom)
+            for sat in satList:
+                filenameStr = self.test_EEBatchToDrive(target_geom, imageParams, sat.lower(),drive,pathPrefix)
+                fileBatch.append([pathPrefix,filenameStr,sat])
+        return fileBatch
     
         
-    def downloadGoogleSatellite(self, center_longitude, center_latitude, rows = 2, columns = 2):
+    def downloadGoogleSatellite(self, center_longitude, center_latitude, rowsP = 2, columnsP = 2,pathPrefix="",zoomChange=1):
         # If you need to do a lot of maps you might want
         # to use an API key and set it here with key='YOUR_API_KEY'
         #min_pt = uf_reef_geom.geometries().get(0)
@@ -253,16 +384,18 @@ class GoogleEarthClient():
         #fig, ax = plt.subplots()
         #f, ax1 = plt.subplots(figsize=(12, 5))
         lat_lon_offset = np.zeros([2],dtype=float);
-        #columns = 10
-        #rows = 10
-        mapTiles = MapTiles(rows, columns);
-        imgWidth = 640;
-        imgHeight = 640;
+        imgHeight = 615.0
+        rows = int(math.ceil(rowsP/imgHeight))
         verticalOverlap = 25; # Google watermark is on the last 24 pixel rows
+        imgHeight = 640
+        imgWidth = 640.0
+        columns = int(math.ceil(columnsP/imgWidth))
         horizontalOverlap = 0; # Google watermark is on the last 24 pixel rows
+        imgWidth = 640
+        mapTiles = MapTiles(rows, columns);
         themaptype = 'satellite'
         scaleValue = 1
-        zoomValue = 17
+        zoomValue = min(17-int(math.log(zoomChange,2)),20)
         numPixelsX = (imgWidth - horizontalOverlap) * columns;
         numPixelsY = (imgHeight - verticalOverlap) * rows;
         grid = googlestatic_mercator_grid2(center_ll=target_lon_lat, nx=numPixelsX,
@@ -312,7 +445,7 @@ class GoogleEarthClient():
 
         for tileYIdx in range(0,rows):
             for tileXIdx in range(0,columns):
-                print("Grabbing (X,Y) tile (%d,%d) of (%d,%d)" % (tileYIdx+1,tileXIdx+1,columns,rows))
+                print("Grabbing (X,Y) tile (%d,%d) of (%d,%d)" % (tileXIdx+1,tileYIdx+1,columns,rows))
                 lat_lon_offset = [tile_center_coords[tileYIdx][tileXIdx][1],
                                   tile_center_coords[tileYIdx][tileXIdx][0]]
                 if (False):
@@ -367,13 +500,35 @@ class GoogleEarthClient():
                 del mapTiles.tiles[tileYIdx][tileXIdx]
         del mapTiles
 
+        grid = googlestatic_mercator_grid2(center_ll=target_lon_lat, nx=columnsP,
+                                                  ny=rowsP, zoom=zoomValue,
+                                                  scale=scaleValue)
+        epsg3857_rect_m_east_north = grid.extent
+        min_m_east_north =  np.array([epsg3857_rect_m_east_north[0], epsg3857_rect_m_east_north[2]])
+        max_m_east_north =  np.array([epsg3857_rect_m_east_north[1], epsg3857_rect_m_east_north[3]])
+        range_m = max_m_east_north - min_m_east_north
+        m_per_ypixel = np.abs(range_m[1]) / rowsP
+        m_per_xpixel = np.abs(range_m[0]) / columnsP        
+        epsg4326_rect_lon_lat = grid.extent_in_crs()
+        min_lon_lat =  np.array([epsg4326_rect_lon_lat[0], epsg4326_rect_lon_lat[2]])
+        max_lon_lat =  np.array([epsg4326_rect_lon_lat[1], epsg4326_rect_lon_lat[3]])
+
+        diffX = int(columnsP/2)
+        diffY = int(rowsP/2)
+        centerX = int(numPixelsX/2)
+        centerY = int(numPixelsY/2)
+        
+        print(mergedTile.shape)
+        print("Range: {} - {}, {} - {}".format(centerX-diffX,centerX+diffX,centerY-diffY,centerY+diffY))
+        mergedTile = mergedTile[centerY-diffY:centerY+diffY,centerX-diffX:centerX+diffX,:]
+
         [outputHeight, outputWidth, comps] = mergedTile.shape;
         width_m = outputWidth*m_per_xpixel
         height_m = outputHeight*m_per_ypixel
         img_filename = 'satellite_%sE_%sN_%dx_%dy_%dm_EW_%dm_NS.png' % (center_longitude, center_latitude, \
                     outputWidth, outputHeight, width_m, height_m)
-        print('Creating image file %s' % str(img_filename))
-        plt.imsave(img_filename, mergedTile)
+        print('Creating image file %s' % str(pathPrefix+img_filename))
+        plt.imsave(pathPrefix+img_filename, mergedTile)
         image_params = {
                 'filename': img_filename,
                 'xy_dimensions_m': [width_m, height_m],
@@ -390,7 +545,7 @@ class GoogleEarthClient():
                 }
         return image_params
     
-    def writeGazeboModelAsTarfile(self, model_name, image_params):
+    def writeGazeboModelAsTarfile(self, model_name, image_params,pathPrefix=""):
         template_params = {
             'xy_dimensions_m':['%SIZE_METERS_X%','%SIZE_METERS_Y%'],
             'filename': '%TEXTURE_IMAGE_NAME%',
@@ -402,7 +557,7 @@ class GoogleEarthClient():
         strSDF = self.replaceTemplateParameters('satellite_ground_plane_template/model.sdf', template_params, image_params)
         strConfig = self.replaceTemplateParameters('satellite_ground_plane_template/model.config', template_params, image_params)
         strMaterial = self.replaceTemplateParameters('satellite_ground_plane_template/ground_plane_satellite.material', template_params, image_params)
-        tarfilename = model_name + ".tar.gz"
+        tarfilename = pathPrefix + model_name + ".tar.gz"
         
         import tarfile
 
@@ -411,7 +566,7 @@ class GoogleEarthClient():
         self.writeStringToTARFile(tarfile_obj, "model.sdf", strSDF)
         self.writeStringToTARFile(tarfile_obj, "model.config", strConfig)
         self.writeStringToTARFile(tarfile_obj, model_name + ".material", strMaterial)
-        tarfile_obj.add(image_params['filename'])
+        tarfile_obj.add(pathPrefix+image_params['filename'])
         tarfile_obj.close()
         
     def replaceTemplateParameters(self, filename, template_params, image_params):
@@ -469,8 +624,19 @@ class GoogleEarthClient():
 
     def function22(image, geom):
         return image.clip(geom)
+        
+    def maskS2clouds(self, image):
+        qa = image.select('QA60')
+        
+        cloudBitMask = 1 << 10
+        cirrusBitMask = 1 << 11
+        
+        img1 = qa.bitwiseAnd(cloudBitMask).eq(0)
+        img2 = qa.bitwiseAnd(cirrusBitMask).eq(0)
+        mask = img1 and img2
+        return image.updateMask(mask)
 
-    def test_EEBatchToDrive(self, eeImageGeometry):
+    def test_EEBatchToDrive(self, eeImageGeometry, imageParams,satUsed,GDrive,pathPrefix=""):
         uf_reef_geom = eeImageGeometry
         print('geom=', eeImageGeometry)
         print('centroid=', eeImageGeometry.centroid())
@@ -478,21 +644,29 @@ class GoogleEarthClient():
         #target_lat_lon = np.array([ center_latitude, center_longitude])
         #uf_reef_geom = ee.Geometry.Point(target_lat_lon.tolist())
         #uf_reef_geom2 = ee.Geometry.LineString([[-120, 35], [-119, 35], [-119, 34], [-120, 34]])
+        
+        # LIST OF SATELLITES
         # Planet SkySat Public Ortho Imagery, RGB
         # 0-255 RGB pixels, 0.8m resolution
         #sat = 'skysat' 
         # NAIP: National Agriculture Imagery Program
         # 0-255 RGB pixels, 1m resolution
-        #sat = 'usda_naip' 
+        if (satUsed == "naip"):
+            sat = 'usda_naip' 
         # USGS Landsat 8 Surface Reflectance Tier 1 
         # 0-10000 pixel values 30m resolution
         #sat = 'landsat-8-sr' 
         # Sentinel-1 C-band Synthetic Aperture Radar Ground Range corrected
-        # -50 to 1 db range resolution 
-        sat = 'sentinel-1-grd' 
+        # -50 to 1 db range resolution
+        if (satUsed == "sar"):
+            sat = 'sentinel-1-grd' 
         # Sentinel-2 orthorectified atmospherically corrected surface reflectance.
         # pixel range 10000 resolution 10m
         #sat = 'sentinel-2-sr' 
+        if (satUsed == "cloudy"):
+            sat = 'sentinel-2-sr-cloudy'
+        if (satUsed == "cloudless"):
+            sat = 'sentinel-2-sr-cloudless'
         if (sat == 'skysat'):
             imgCollection = ee.ImageCollection('SKYSAT/GEN-A/PUBLIC/ORTHO/RGB') \
                                             .select(['R', 'G', 'B']) \
@@ -505,22 +679,39 @@ class GoogleEarthClient():
         elif (sat == 'usda_naip'):
             imgCollection = ee.ImageCollection('USDA/NAIP/DOQQ') \
                                             .select(['R', 'G', 'B']) \
-                                            .filterBounds(uf_reef_geom)
+                                            .filterBounds(uf_reef_geom) \
+                                            .filter(ee.Filter.date('2017-01-01', '2018-12-31'))
             # Define the visualization parameters.
             vizParams = {
                'min': 0.0,
                'max': 255.0
             }
-        elif (sat == 'sentinel-2-sr'):
+        elif (sat == 'sentinel-2-sr-cloudless'):
             imgCollection = ee.ImageCollection('COPERNICUS/S2_SR') \
-                                            .select(['B4', 'B3', 'B2']) \
                                             .filterBounds(uf_reef_geom) \
-                                            .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE',20))
+                                            .filterDate('2018-06-01', '2021-01-30') \
+                                            .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE',5)) \
+                                            .map(self.maskS2clouds)
+            imgCollection = imgCollection.select(['TCI_R', 'TCI_G', 'TCI_B'])
+                                            #.filter(ee.Filter.rangeContains('CLOUD_COVERAGE_ASSESSMENT', 35,60))      
             # Define the visualization parameters.
             vizParams = {
-               'bands': ['B4', 'B3', 'B2'],
-               'min': 0.0,
-               'max': 5000.0 # range is 10000 
+               'bands': ['TCI_R', 'TCI_G', 'TCI_B'],
+               'min': 0,
+               'max': 255 # range is 10000 
+            }
+        elif (sat == 'sentinel-2-sr-cloudy'):
+            imgCollection = ee.ImageCollection('COPERNICUS/S2_SR') \
+                                            .filterBounds(uf_reef_geom) \
+                                            .filterDate('2018-06-01', '2021-01-30') \
+                                            .filter(ee.Filter.gt('CLOUDY_PIXEL_PERCENTAGE',5)) \
+                                            .map(self.maskS2clouds)
+            imgCollection = imgCollection.select(['TCI_R', 'TCI_G', 'TCI_B'])                                      
+            # Define the visualization parameters.
+            vizParams = {
+               'bands': ['TCI_R', 'TCI_G', 'TCI_B'],
+               'min': 0,
+               'max': 255 # range is 10000 
             }
         elif (sat == 'sentinel-1-grd'):
             imgCollection = ee.ImageCollection('COPERNICUS/S1_GRD') \
@@ -554,26 +745,39 @@ class GoogleEarthClient():
                 'gamma': 1.4
             }
         #reduced_image = imgCollection.first()
-        reduced_image = imgCollection.median()
+        #reduced_image = imgCollection.median()
+        reduced_image = imgCollection.mean()
         scaleVal = reduced_image.projection().nominalScale()
         print('projection ',str(reduced_image.projection().getInfo()))
         print('Centroid coordinates = ',str(eeImageGeometry.centroid().getInfo()['coordinates']))
         print('Nominal scale = ',str(scaleVal.getInfo()))
         print('EPSG 4326 Rect Coordinates = ',str(eeImageGeometry.getInfo()['coordinates']))
         centroid = eeImageGeometry.centroid().getInfo()['coordinates']
-        filenameStr = 'sat_'+ sat + '_' + str(centroid[0]) + 'E' +'_' + str(centroid[1]) + 'W'+ '_' + str(scaleVal.getInfo()) + 'm'
+        filenameStr = 'sat_'+ sat + '_' + str(centroid[1]) + 'N' +'_' + str(centroid[0]) + 'E'+ '_' + str(scaleVal.getInfo()) + 'm'
         print('Filename = ', filenameStr)
         #scaleVal = scaleVal.getInfo()
         scaleVal = 10
-        task_config = {
-            'fileFormat': 'GeoTIFF',
-            'scale': scaleVal, # m/pixel ?
-            'maxPixels' : 6e6,
-            'region' : eeImageGeometry.getInfo()['coordinates'],
-            #'crs': 'EPSG:3857'
-            'crs': 'EPSG:4326'
-        }
-        
+        # CHANGE BETWEEN USING DIMENSIONS AND SCALE FOR NAIP AND SAR/Sen-2 images respectively
+        if (satUsed == "naip"):
+            task_config = {
+                'fileFormat': 'GeoTIFF',
+                #'scale': scaleVal, # m/pixel ?
+                'maxPixels' : 6e9,
+                'region' : eeImageGeometry.getInfo()['coordinates'],
+                'dimensions' : str(imageParams['xy_dimensions_pixels'][0]) + "x" + str(imageParams['xy_dimensions_pixels'][1]),
+                #'crs': 'EPSG:3857'
+                'crs': 'EPSG:4326'
+            }
+        else:
+            task_config = {
+                'fileFormat': 'GeoTIFF',
+                'scale': scaleVal, # m/pixel ?
+                'maxPixels' : 6e9,
+                'region' : eeImageGeometry.getInfo()['coordinates'],
+                #'dimensions' : str(imageParams['xy_dimensions_pixels'][0]) + "x" + str(imageParams['xy_dimensions_pixels'][1]),
+                #'crs': 'EPSG:3857'
+                'crs': 'EPSG:4326'
+            }
         listOfImages = imgCollection.toList(10);
         landsat_image = ee.Image(listOfImages.get(0))
 #        urlpath = landsat_image.getDownloadUrl({
@@ -666,10 +870,49 @@ class GoogleEarthClient():
             print(task.status())
             time.sleep(5)        
         print(task.status()['state'])
+        
+        return filenameStr
+        
+    def driveDownloader(self,fileBatch):
+        gauth = GoogleAuth()
+        gauth.LocalWebserverAuth()
+        GDrive = GoogleDrive(gauth)
+    
+        qID = None
+        file_list = GDrive.ListFile({'q': "'root' in parents and trashed=false"}).GetList()
+        for file in fileBatch:
+            pathPrefix = file[0]
+            filenameStr = file[1]
+            satUsed = file[2]
+            for file1 in file_list:
+                if(file1['title'] == filenameStr+'.tif'):
+                    qID = file1['id']
+
+            if (qID is not None):        
+                file = GDrive.CreateFile({'id': qID})
+                file.GetContentFile(pathPrefix+filenameStr+'.tif')
+
+                src = gdal.Open(pathPrefix+filenameStr+'.tif')
+                if(satUsed == 'naip' or satUsed == 'cloudy' or satUsed == 'cloudless'):
+                    gdal.Translate(pathPrefix+filenameStr+'.png',src,format='PNG')
+                elif(satUsed == 'sar'):
+                    band = src.GetRasterBand(1)
+                    (bMin,bMax) = band.ComputeRasterMinMax(True)
+                    gdal.Translate(pathPrefix+filenameStr+'.png',src,format='PNG',scaleParams=[[bMin,bMax]])
+                src = None
         return
 
 if __name__ == '__main__':
     #try:
-    geClient = GoogleEarthClient()
+    if (len(sys.argv) == 1 or not (sys.argv[1] == 'random' or sys.argv[1] == 'manual' or sys.argv[1] == 'randomMulti')):
+        print("First input must be \"manual\", \"random\", or \"randomMulti\" (Without the quotations)")
+    elif (len(sys.argv) < 9 and sys.argv[1] == 'random'):
+        print("Need arguments with:\nThe upper left corner lat long coordinates being the first 2 arguments.\nThe bottom right corner lat long coordinates for the next 2 arguments.\nThe number of pixels in x and y.\nWhat meter/pixel ratio is needed.\nEXAMPLE: python googleearth_client.py random 48.852411 -121.706750 32.534790 -80.935663 1920 1080 1")
+    elif (len(sys.argv) < 10 and sys.argv[1] == 'randomMulti'):
+        print("Need arguments with:\nThe upper left corner lat long coordinates being the first 2 arguments.\nThe bottom right corner lat long coordinates for the next 2 arguments.\nThe number of pixels in x and y.\nWhat meter/pixel ratio is needed.\nHow many images are needed.\nEXAMPLE: python googleearth_client.py randomMulti 48.852411 -121.706750 32.534790 -80.935663 1920 1080 1 50")
+    elif (len(sys.argv) < 7 and sys.argv[1] == 'manual'):
+        print("Need arguments with:\nThe lat long coordinates being the first 2 arguments.\nThe number of pixels in x and y.\nWhat meter/pixel ratio is needed.\nEXAMPLE: python googleearth_client.py manual 48.852411 -121.706750 1920 1080 1")
+    else:
+        geClient = GoogleEarthClient(sys.argv)
     #except:
     #    pass
