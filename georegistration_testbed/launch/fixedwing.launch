@@ -71,11 +71,28 @@
     <arg name="GMAPS_REFERENCE_IMAGE_FILE_B" default="$(find georegistration_testbed)/models/ISLETA_PUEBLO_SATELLITE/satellite_-106.492639E_34.848778N_10880x_10455y_12994m_EW_12486m_NS.png"/>
     <arg name="GMAPS_REFERENCE_IMAGE_FILE_C" default="$(find georegistration_testbed)/models/CONCORD_SATELLITE/satellite_-80.535865E_35.395703N_9600x_9225y_11465m_EW_11017m_NS.png"/>
     <arg name="GMAPS_REFERENCE_IMAGE_FILE_D" default="$(find georegistration_testbed)/models/ALBUQUERQUE_SATELLITE/satellite_-106.844806E_35.317139N_10880x_10455y_12994m_EW_12486m_NS.png"/>
+
+    <arg name="MODEL_SIZE_X_A" default="7643"/>
+    <arg name="MODEL_SIZE_X_B" default="12994"/>
+    <arg name="MODEL_SIZE_X_C" default="11465"/>
+    <arg name="MODEL_SIZE_X_D" default="12994"/>
+
+    <arg name="MODEL_SIZE_Y_A" default="7345"/>
+    <arg name="MODEL_SIZE_Y_B" default="12486"/>
+    <arg name="MODEL_SIZE_Y_C" default="11017"/>
+    <arg name="MODEL_SIZE_Y_D" default="12486"/>
+
+    <arg name="DETECT_ALGORITHM" default="ORB"/>
+    <arg name="EXTRACT_ALGORITHM" default="ORB"/>
     
     <!-- SELECT THE ONBOARD GEO-REFERENCED IMAGE AS ONBOARD_REFERENCE_IMAGE -->
-    <arg name="ONBOARD_REFERENCE_IMAGE" default="$(arg GMAPS_REFERENCE_IMAGE_FILE_B)"/>
     <!-- SELECT THE SENSOR SOURCE IMAGE FOR SIMULATED IMAGE DATA AS SENSOR_REFERENCE_IMAGE -->
-    <arg name="SENSOR_REFERENCE_IMAGE" default="$(arg SAR_REFERENCE_IMAGE_FILE_B)"/>
+    <arg name="ONBOARD_REFERENCE_IMAGE" default="$(arg GMAPS_REFERENCE_IMAGE_FILE_D)"/>
+    <arg name="SENSOR_REFERENCE_IMAGE" default="$(arg SAR_REFERENCE_IMAGE_FILE_D)"/>
+    <arg name="MODEL_SIZE_X" default="$(arg MODEL_SIZE_X_D)"/>
+    <arg name="MODEL_SIZE_Y" default="$(arg MODEL_SIZE_Y_D)"/>
+    <arg name="DETECTOR" default="$(arg DETECT_ALGORITHM)"/>
+    <arg name="EXTRACTOR" default="$(arg EXTRACT_ALGORITHM)"/>
     <rosparam param="sar/sar_texture_filename" subst_value="True" ns="$(arg mav_name)">$(arg SENSOR_REFERENCE_IMAGE)</rosparam>
 
     <!-- Spawn MAV -->
@@ -184,12 +201,12 @@
             <!--<param name="reference_image" value="$(arg base_path)/UNCC_EPIC_SATELLITE/satellite_-80.741692E_35.309003N_6400x_6150y_7643m_EW_7345m_NS.png"/> -->
             <!--<param name="rgb_sensor_image" value="$(arg base_path)/UNCC_EPIC_SATELLITE/satellite_-80.741692E_35.309003N_6400x_6150y_7643m_EW_7345m_NS.png"/> -->
             <param name="reference_image" value="$(arg ONBOARD_REFERENCE_IMAGE)"/>
-            <param name="rgb_sensor_image" value="$(arg ONBOARD_REFERENCE_IMAGE)"/>
-            <param name="model_size_x" value="7643"/>
-            <param name="model_size_y" value="7345"/>
+            <param name="rgb_sensor_image" value="$(arg SENSOR_REFERENCE_IMAGE)"/>
+            <param name="model_size_x" value="$(arg MODEL_SIZE_X)"/>
+            <param name="model_size_y" value="$(arg MODEL_SIZE_Y)"/>
             <!-- Detector and extractor params -->
-            <param name="ALGORITHM_DETECT" value="ORB"/>
-            <param name="ALGORITHM_EXTRACT" value="ORB"/>
+            <param name="ALGORITHM_DETECT" value="$(arg DETECTOR)"/>
+            <param name="ALGORITHM_EXTRACT" value="$(arg EXTRACTOR)"/>
         </node>
     </group>
 </launch>

@@ -12,17 +12,22 @@ from georegistration_gazebo_msgs.srv import *
 from georegistration_testbed.msg import *
 from image_geometry import PinholeCameraModel
 from image_registration_mi import *
+from image_registration_cc import *
 # from image_registration_mi_ocl import *
 from image_registration_ocv_features import *
 import numpy as np
 import rospy
 from sensor_msgs.msg import CameraInfo
 from sensor_msgs.msg import Image
+import rosgraph_msgs.msg
+import re
+import timeit
 
 class Algorithm(Enum):
     OPENCV_FEATURES = 1
     MUTUAL_INFORMATION = 2 
     MUTUAL_INFORMATION_OCL = 3
+    CROSS_CORRELATION = 4
 
 class ROSImageRegistrationNode(object):
     """An object representing a ROS Image Registration Node."""
@@ -31,9 +36,13 @@ class ROSImageRegistrationNode(object):
         # Debug and visualization flags
         self.DEBUG = False
         self.ROS_VISUALIZE_SENSOR_VIEW_FRUSTUM = True
+        self.VISUALIZE_TRAJECTORY = True
+        self.USE_REFERENCE_FOR_TRAJECTORY = False
+        self.TRAJECTORY_LINE_SIZE = 4
         # Uncomment the line below for simulated EO images and OpenCV features for image alignment
         #self.ALGORITHM = Algorithm.OPENCV_FEATURES
-        self.ALGORITHM = Algorithm.MUTUAL_INFORMATION
+        #self.ALGORITHM = Algorithm.MUTUAL_INFORMATION
+        self.ALGORITHM = Algorithm.CROSS_CORRELATION
         # Uncomment the line below for simulated SAR images and mutual information for image alignment
         self.USE_SIMULATED_RGB_MOVING_IMAGE = False
         self.LOGGING = True
@@ -52,6 +61,8 @@ class ROSImageRegistrationNode(object):
             self.algorithm = ImageRegistrationWithMutualInformation()
         elif (self.ALGORITHM == Algorithm.MUTUAL_INFORMATION_OCL):
             self.algorithm = ImageRegistrationWithMutualInformationOpenCL()
+        elif (self.ALGORITHM == Algorithm.CROSS_CORRELATION):
+            self.algorithm = ImageRegistrationWithCrossCorrelation()    
             
         # Instantiate CvBridge
         self.bridge = CvBridge()
@@ -69,6 +80,7 @@ class ROSImageRegistrationNode(object):
         self.camera_info_sub = rospy.Subscriber('camera/camera_info', CameraInfo, self.rgbCameraInfoCallback, queue_size=1)
         self.sar_image_sub = rospy.Subscriber('sar/image_raw', Image, self.sarImageCallback, queue_size=5)
         self.sar_camera_view_sub = rospy.Subscriber('sar/camera_view', SARCameraView, self.sarCameraViewCallback, queue_size=5)
+        self.waypoint_msg_sub = rospy.Subscriber('/rosout_agg', rosgraph_msgs.msg.Log, self.waypointMessageCallback, queue_size=1)
         
         self.prev_SAR_image_msg = None
         self.prev_RGB_image_msg = None
@@ -76,6 +88,9 @@ class ROSImageRegistrationNode(object):
         self.register_query_image = None
         self.prev_homography = None
         self.prev_nav_state = None
+        self.prev_coordinate = None
+        self.traj_image = None
+        self.waypoint_num = "-1"
         
         self.ref_image_match_pub = rospy.Publisher('sar_registered/ref_image_match', Image, queue_size=1)
         self.register_moving_image_pub = rospy.Publisher('sar_registered/register_moving_image', Image, queue_size=1)
@@ -94,6 +109,12 @@ class ROSImageRegistrationNode(object):
                 self.image_sensed_src = self.image_ref
             #rospy.loginfo('shape = %s' % str(image_ref.shape[:3]))
             #self.image_ref = self.image_ref[:,range(0,image_ref.shape[1],10),:];
+
+            if (self.USE_REFERENCE_FOR_TRAJECTORY == True):
+                self.traj_image = self.image_ref.copy()
+            else:
+                self.traj_image = self.image_sensed_src.copy()
+
             rospy.loginfo('image_registration::Read reference image %s.' % self.reference_image_filename)
             self.ref_scale = 1.0
             self.image_ref = cv2.resize(self.image_ref, (0, 0), fx=self.ref_scale, fy=self.ref_scale, interpolation=cv2.INTER_NEAREST)
@@ -165,11 +186,25 @@ class ROSImageRegistrationNode(object):
             #else:
             #    self.datafile.write("\n")
 
+    def waypointMessageCallback(self, rosout_msg):
+        '''
+        Message style to look for
+        STRAIGHT: Vehicle has reached waypoint 2
+        Because there's no publishing of the waypoints, need to look at the rosout log for waypoints
+        '''
+        #print("RECEIVED MESSAGE: %s" % rosout_msg.msg)
+        w = re.search(r'(\D+): Vehicle has reached waypoint (\d+)', rosout_msg.msg)
+        if w:
+            self.waypoint_num = w.group(2)
+            #print("WAYPOINT RECEIVED: %d" % int(w.group(2)))
+
     def sarCameraViewCallback(self, camera_view_msg):
         MIN_IMAGE_DIMENSION = 50
         try:
             if (self.image_ref is None):
                 return
+			#Timing for algorithms
+            start = timeit.default_timer()
             #print("Got SAR camera view message")
             uv_corners = np.reshape(camera_view_msg.plane_uv_coords, (2, 4))
             #print("uv_corners = %s" % str(uv_corners))
@@ -182,6 +217,8 @@ class ROSImageRegistrationNode(object):
             cameraK = np.reshape(camera_view_msg.K, (3, 3))
             #print("camera_K = %s" % str(cameraK))
             cameraPose = np.reshape(camera_view_msg.pose, (4, 4))
+            # Collect current coordinates
+            current_coordinate = tuple(cameraPose[:2,3])
             if (self.DEBUG == True):
                 print("camera_pose = %s" % str(cameraPose))
                         
@@ -266,6 +303,8 @@ class ROSImageRegistrationNode(object):
             if (self.register_moving_image is not None and 
                 np.min(self.register_moving_image.shape[:2]) > MIN_IMAGE_DIMENSION and
                 np.min(self.register_fixed_image.shape[:2]) > MIN_IMAGE_DIMENSION):
+                #detectList = ["ORB","GFTT","FAST","BRISK","SURF","SIFT"]
+                #descriptList = ["ORB","SURF","SIFT","BRISK","BOOST"]
                 if (self.ALGORITHM == Algorithm.OPENCV_FEATURES):
                     (Hrgb_estimated, mask) = self.algorithm.registerImagePair(self.register_moving_image, image_ref=self.register_fixed_image, 
                                                                               image_ref_keypoints=None, image_ref_descriptors=None,
@@ -277,7 +316,12 @@ class ROSImageRegistrationNode(object):
                                                                               initialTransform)                                             
                 elif (self.ALGORITHM == Algorithm.MUTUAL_INFORMATION_OCL):
                     (Hrgb_estimated, mask) = self.algorithm.registerImagePair(self.register_moving_image, self.register_fixed_image,
-                                                                              initialTransform)                                             
+                                                                              initialTransform)
+                elif (self.ALGORITHM == Algorithm.CROSS_CORRELATION):
+                    initialTransform = np.linalg.inv(Hrgb_bbox_truth)
+                    initialTransform = initialTransform / initialTransform[2, 2]
+                    (Hrgb_estimated, mask) = self.algorithm.registerImagePair(self.register_moving_image, self.register_fixed_image,
+                                                                              initialTransform)
             
                 #print('Hrgb_truth  = %s' % str(Hrgb_truth))
                 #print('Hbbox_truth = %s' % str(Hrgb_bbox_truth))
@@ -341,6 +385,8 @@ class ROSImageRegistrationNode(object):
                     self.dumpNumpyDataToLog(invPoseTransform_est)
                     self.dumpNumpyDataToLog(yaw_pitch_roll_xyz_err_est)
                     self.dumpNumpyDataToLog(Herror)
+                    self.dumpAsStringToLog(self.waypoint_num)
+                    self.dumpAsStringToLog(str(timeit.default_timer()-start))
                     self.logfileNewline()                               
 
                 if (self.DEBUG == True):
@@ -368,7 +414,10 @@ class ROSImageRegistrationNode(object):
                     cv2.namedWindow(window_title, cv2.WINDOW_NORMAL)
                     cv2.imshow(window_title, img)
                     cv2.resizeWindow(window_title, 600, 600)
-                    cv2.waitKey(5)        
+                    cv2.waitKey(5)
+
+                if (self.VISUALIZE_TRAJECTORY == True):
+                    self.visualizeTrajectory(current_coordinate)
 
             if (np.min(self.register_moving_image.shape[:2]) > 3):
                 register_moving_image_message = self.bridge.cv2_to_imgmsg(self.register_moving_image, encoding="passthrough")
@@ -430,6 +479,34 @@ class ROSImageRegistrationNode(object):
         except CvBridgeError, e:
             print(e)
             
+    def visualizeTrajectory(self, coord):
+        (height, width) = self.traj_image.shape[:2]
+        coord = np.asarray(coord, dtype=np.float32)
+        coord[1] *= -1
+        center_of_model_XY = 0.5 * np.asarray((self.reference_gazebo_model_size_x, self.reference_gazebo_model_size_y), dtype=np.float32)
+        coord += center_of_model_XY
+        pixel_coord = (coord[0]/self.reference_gazebo_model_size_x*width, coord[1]/self.reference_gazebo_model_size_y*height)
+        pixel_coord = tuple(np.asarray(pixel_coord,dtype=np.int32))
+        if (self.DEBUG == True):
+            print('Image Shape: (%s, %s)' % (str(width),str(height)))
+            print("Previous Coordinate = %s\nCurrent Coordinate = %s" % (str(self.prev_coordinate), str(pixel_coord)))
+
+        if (self.traj_image is not None and self.prev_coordinate is not None):
+            window_title = 'flight path'
+            cv2.namedWindow(window_title, cv2.WINDOW_NORMAL)
+            cv2.line(self.traj_image,self.prev_coordinate, pixel_coord,(0,255,0),self.TRAJECTORY_LINE_SIZE)
+            if (self.waypoint_num != "-1"):
+                print("JUST TO CONFIRM: %d" % int(self.waypoint_num))
+                font = cv2.FONT_HERSHEY_PLAIN
+                text_size, _ = cv2.getTextSize(self.waypoint_num,font, 2,1)
+                cv2.rectangle(self.traj_image,pixel_coord,(pixel_coord[0]+text_size[0],pixel_coord[1]+text_size[1]),(255,0,0),-1)
+                self.traj_image = cv2.putText(self.traj_image,self.waypoint_num,(pixel_coord[0],pixel_coord[1]+text_size[1]),font,2,(0,0,0),1)
+                self.waypoint_num = "-1"
+            cv2.imshow(window_title,self.traj_image)
+            cv2.resizeWindow(window_title, 600,600)
+            cv2.waitKey(5)
+        self.prev_coordinate = pixel_coord
+
     def visualizeHomography(self, sensor_img, image_ref, homography, mask):
         (width, height) = sensor_img.shape[:2]
         pts_homogeneous_image_corners = np.array([[0, width, width, 0],

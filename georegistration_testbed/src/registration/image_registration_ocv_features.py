@@ -15,17 +15,26 @@ class ImageRegistrationWithOpenCVFeatures(ImageRegistration):
     def toString(self):
         return "alg = OCV_FEATURE detector = %s extractor = %s" % (self.detector_str, self.extractor_str)
 
-    def initializeFeatureRegistration(self, refImageFeatureCount=500, movingImageFeatureCount=500, detector='ORB', extractor='ORB'):
+    def initializeFeatureRegistration(self, refImageFeatureCount=10000, movingImageFeatureCount=10000, detector='ORB', extractor='ORB'):
         self.detector_str = detector;
         if(detector == 'ORB'):
-            self.kpDetector_ref = cv2.ORB_create(nfeatures=refImageFeatureCount)
-            self.kpDetector_moving = cv2.ORB_create(nfeatures=movingImageFeatureCount)
+            self.kpDetector_ref = cv2.ORB_create(nfeatures=refImageFeatureCount, fastThreshold=0)
+            self.kpDetector_moving = cv2.ORB_create(nfeatures=movingImageFeatureCount, fastThreshold=0)
         elif(detector == 'GFTT'):
-            self.kpDetector_ref = cv2.GFTTDetector_create()
-            self.kpDetector_moving = cv2.GFTTDetector_create()
+            self.kpDetector_ref = cv2.GFTTDetector_create(maxCorners=refImageFeatureCount,minDistance=10)
+            self.kpDetector_moving = cv2.GFTTDetector_create(maxCorners=movingImageFeatureCount,minDistance=10)
         elif(detector == 'FAST'):
             self.kpDetector_ref = cv2.FastFeatureDetector_create()
             self.kpDetector_moving = cv2.FastFeatureDetector_create()
+        elif(detector == 'BRISK'):
+            self.kpDetector_ref = cv2.BRISK_create()
+            self.kpDetector_moving = cv2.BRISK_create()
+        elif(detector == 'SURF'):
+            self.kpDetector_ref = cv2.xfeatures2d.SURF_create(nOctaves=5)
+            self.kpDetector_moving = cv2.xfeatures2d.SURF_create(nOctaves=5)
+        elif(detector == 'SIFT'):
+            self.kpDetector_ref = cv2.xfeatures2d.SIFT_create(nfeatures=refImageFeatureCount)
+            self.kpDetector_moving = cv2.xfeatures2d.SIFT_create(nfeatures=movingImageFeatureCount)
         #self.descExtractor_ref = cv2.xfeatures2d.SURF_create()
         #self.descExtractor_ref = cv2.xfeatures2d.SIFT_create()
         #self.descExtractor_ref = cv2.ORB_create(nfeatures=refImageFeatureCount)
@@ -37,14 +46,20 @@ class ImageRegistrationWithOpenCVFeatures(ImageRegistration):
 
         self.extractor_str = extractor;
         if(extractor == 'ORB'):
-            self.descExtractor_ref = cv2.ORB_create(nfeatures=refImageFeatureCount)
-            self.descExtractor_moving = cv2.ORB_create(nfeatures=movingImageFeatureCount)
+            self.descExtractor_ref = cv2.ORB_create(nfeatures=refImageFeatureCount, fastThreshold=0)
+            self.descExtractor_moving = cv2.ORB_create(nfeatures=movingImageFeatureCount, fastThreshold=0)
         elif(extractor == 'SURF'):
-            self.descExtractor_ref = cv2.xfeatures2d.SURF_create()
-            self.descExtractor_moving = cv2.xfeatures2d.SURF_create()
+            self.descExtractor_ref = cv2.xfeatures2d.SURF_create(nOctaves=5)
+            self.descExtractor_moving = cv2.xfeatures2d.SURF_create(nOctaves=5)
         elif(extractor == 'SIFT'):
-            self.descExtractor_ref = cv2.xfeatures2d.SIFT_create()
-            self.descExtractor_moving = cv2.xfeatures2d.SIFT_create()
+            self.descExtractor_ref = cv2.xfeatures2d.SIFT_create(nfeatures=refImageFeatureCount)
+            self.descExtractor_moving = cv2.xfeatures2d.SIFT_create(nfeatures=movingImageFeatureCount)
+        elif(extractor == 'BRISK'):
+            self.descExtractor_ref = cv2.BRISK_create()
+            self.descExtractor_moving = cv2.BRISK_create()
+        elif(extractor == 'BOOST'):
+            self.descExtractor_ref = cv2.xfeatures2d.BoostDesc_create()
+            self.descExtractor_moving = cv2.xfeatures2d.BoostDesc_create()
         
         #self.kpDetector_moving = cv2.ORB_create(nfeatures=movingImageFeatureCount)
         #self.kpDetector_moving = cv2.GFTTDetector_create()
@@ -59,7 +74,7 @@ class ImageRegistrationWithOpenCVFeatures(ImageRegistration):
             self.descExtractor_ref = cv2.ORB_create(nfeatures=refImageFeatureCount)
             self.descExtractor_moving = cv2.ORB_create(nfeatures=movingImageFeatureCount)
         #DEBUG
-        #print("Detector: {}\nExtractor: {}".format(self.kpDetector_ref,self.kpDetector_moving))
+        print("Detector: {}\nExtractor: {}".format(type(self.kpDetector_ref),type(self.descExtractor_moving)))
         self.initialized = True
                                 
     def multiScaleImageRegistration(self, image_moving, image_ref,algorithm_detector='ORB', algorithm_extractor='ORB'):
@@ -163,7 +178,10 @@ class ImageRegistrationWithOpenCVFeatures(ImageRegistration):
         print ('keypoints (reference, moving) (%d,%d)' % (len(keypoints_ref), len(keypoints_moving)))
         print ('descriptors (reference, moving) (%d,%d)' % (len(descriptors_ref), len(descriptors_moving)))
         #matcher = cv2.DescriptorMatcher_create('BruteForce-Hamming')
-        matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+        if (algorithm_extractor == "SIFT" or algorithm_extractor == "SURF"):
+            matcher = cv2.BFMatcher(cv2.NORM_L2, crossCheck=True)
+        else:
+            matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
         # Match the two sets of descriptors. 
         matches = matcher.match(descriptors_ref, descriptors_moving) 
         # Sort matches on the basis of their Hamming distance. 

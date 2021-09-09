@@ -119,40 +119,42 @@ In order to create a Google Drive API App, you must first go to the [Google API 
 		* randomMulti
 	
 	* If argument 1 is manual:
-		* The lat long coordinates being the next 2 arguments.
-		* The number of pixels in x and y for the final arguments.
+		* The lat long coordinates being the next two arguments.
+		* The number of pixels in x and y for the next two arguments.
+		* The meter per pixel ratio for the final arguement.
 		* sar, naip, cloudy, and cloudless can be used at the end as optional arguments.
 		* EXAMPLE (w/o SAR or NAIP): 
 			
-			`python ee_mapDownloader.py manual 48.852411 -121.706750 5000 5000`
+			`python ee_mapDownloader.py manual 48.852411 -121.706750 5000 5000 1`
 		
 		* EXAMPLE (w/ SAR and NAIP):
 		
-			`python ee_mapDownloader.py manual 48.852411 -121.706750 5000 5000 sar naip`
+			`python ee_mapDownloader.py manual 48.852411 -121.706750 5000 5000 1 sar naip`
 		
 		* GENERIC:
 		
-			`python ee_mapDownloader.py manual latCoord longCoord xPixels yPixels [sar] [naip] [cloudy] [cloudless]`
+			`python ee_mapDownloader.py manual latCoord longCoord xPixels yPixels mpr [sar] [naip] [cloudy] [cloudless]`
 			
 	* If argument 1 is random:
 		* The upper left corner lat long coordinates being the next 2 arguments.
 		* The bottom right corner lat long coordinates for the next 2 arguments.
-		* The number of pixels in x and y for the final arguments.
+		* The number of pixels in x and y for the next two arguments.
+		* The meter per pixel ratio for the final argument.
 		* sar, naip, cloudy, and cloudless can be used at the end as optional arguements.
 		* EXAMPLE (w/o SAR or NAIP):
 			
-			`python ee_mapDownloader.py random 48.852411 -121.706750 32.534790 -80.935663 5000 5000 `
+			`python ee_mapDownloader.py random 48.852411 -121.706750 32.534790 -80.935663 5000 5000 1`
 			
 		* EXAMPLE (w/ SAR and NAIP):
 		
-			`python ee_mapDownloader.py random 48.852411 -121.706750 32.534790 -80.935663 5000 5000 sar naip`
+			`python ee_mapDownloader.py random 48.852411 -121.706750 32.534790 -80.935663 5000 5000 5 sar naip`
 			
 		* GENERIC:
 		
-			`python ee_mapDownloader.py random latCoord longCoord latCoord longCoord xPixels yPixels [sar] [naip] [cloudy] [cloudless]`
+			`python ee_mapDownloader.py random latCoord longCoord latCoord longCoord xPixels yPixels mpr [sar] [naip] [cloudy] [cloudless]`
 			
 	* If argument 1 is randomMulti:
-		* Same as if argument 1 is random, however the number of images must be after the bottom right corner arguments.
+		* Same as if argument 1 is random, however the number of images must be after the meter per pixel argument.
 		* EXAMPLE (w/o SAR or NAIP):
 		
 			`python ee_mapDownloader.py randomMulti 48.852411 -121.706750 32.534790 -80.935663 5000 5000 5`
@@ -161,7 +163,9 @@ In order to create a Google Drive API App, you must first go to the [Google API 
 			`python ee_mapDownloader.py randomMulti 48.852411 -121.706750 32.534790 -80.935663 5000 5000 5 sar naip`
 		* GENERIC:
 		
-			`python ee_mapDownloader.py randomMulti latCoord longCoord latCoord longCoord xPixels yPixels images [sar] [naip] [cloudy] [cloudless]`
+			`python ee_mapDownloader.py randomMulti latCoord longCoord latCoord longCoord xPixels yPixels mpr numImages [sar] [naip] [cloudy] [cloudless]`
+			
+* Note: The latitude and longitude coordinate can be obtained by placing a pin in Google Maps.
 
 ## For manually translating Earth Engine images
 
