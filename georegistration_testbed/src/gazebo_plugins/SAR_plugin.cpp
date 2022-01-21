@@ -35,10 +35,12 @@ namespace rosradar_plugins {
 
     SARPlugin::SARPlugin() : ModelPlugin(), hasReferenceImage(false) {
         sar_cameraview_.homography.resize(9);
+        sar_cameraview_.homography_w_noise.resize(9);
         sar_cameraview_.plane_uv_coords.resize(4 * 2);
         sar_cameraview_.plane_xyz_coords.resize(4 * 3);
         sar_cameraview_.K.resize(3 * 3);
         sar_cameraview_.pose.resize(4 * 4);
+        sar_cameraview_.pose_w_noise.resize(4 * 4);
     }
 
     SARPlugin::~SARPlugin() {
@@ -104,11 +106,10 @@ namespace rosradar_plugins {
         nh_private_ = ros::NodeHandle(namespace_ + "/sar");
 
         // load params from rosparam server
-        int numSat;
         noise_on_ = nh_private_.param<bool>("noise_on", true);
         pub_rate_ = nh_private_.param<double>("rate", 10.0);
         //gnss_topic_ = nh_private_.param<std::string>("topic", "sar");
-        gnss_fix_topic_ = nh_private_.param<std::string>("fix_topic", "sar/fix");
+        //gnss_fix_topic_ = nh_private_.param<std::string>("fix_topic", "sar/fix");
         sar_camera_focal_length_ = nh_private_.param<double>("sar_camera_focal_length", 12.0e-3);
         sar_camera_fov_x_ = nh_private_.param<int>("sar_camera_field_of_view_x", 30);
         sar_camera_fov_y_ = nh_private_.param<int>("sar_camera_field_of_view_y", 30);
@@ -122,21 +123,20 @@ namespace rosradar_plugins {
         ground_plane_model_name_ = nh_private_.param<std::string>("ground_plane_model_name", "");
         sar_texture_filename_ = nh_private_.param<std::string>("sar_texture_filename", "");
         //gnss_vel_topic_ = nh_private_.param<std::string>("vel_topic", "sar/vel");
-        north_stdev_ = nh_private_.param<double>("north_stdev", 0.21);
-        east_stdev_ = nh_private_.param<double>("east_stdev", 0.21);
-        alt_stdev_ = nh_private_.param<double>("alt_stdev", 0.40);
-        velocity_stdev_ = nh_private_.param<double>("velocity_stdev", 0.30);
-        north_k_SAR_ = nh_private_.param<double>("k_north", 1.0 / 1100.0);
-        east_k_SAR_ = nh_private_.param<double>("k_east", 1.0 / 1100.0);
-        alt_k_SAR_ = nh_private_.param<double>("k_alt", 1.0 / 1100.0);
-        initial_latitude_ = nh_private_.param<double>("initial_latitude", 40.267320); // default to Provo, UT
-        initial_longitude_ = nh_private_.param<double>("initial_longitude", -111.635629); // default to Provo, UT
-        initial_altitude_ = nh_private_.param<double>("initial_altitude", 1387.0); // default to Provo, UT
-        numSat = nh_private_.param<int>("num_sats", 7);
+        x_stddev_ = nh_private_.param<double>("x_stddev", 0.1);
+        y_stddev_ = nh_private_.param<double>("y_stddev", 0.1);
+        z_stddev_ = nh_private_.param<double>("z_stddev", 0.1);
+        velocity_stddev_ = nh_private_.param<double>("velocity_stddev", 0.30);
+        roll_stddev_ = nh_private_.param<double>("roll_stddev", 0.01);
+        pitch_stddev_ = nh_private_.param<double>("pitch_stddev", 0.01);
+        yaw_stddev_ = nh_private_.param<double>("yaw_stddev", 0.01);
+        //initial_latitude_ = nh_private_.param<double>("initial_latitude", 40.267320); // default to Provo, UT
+        //initial_longitude_ = nh_private_.param<double>("initial_longitude", -111.635629); // default to Provo, UT
+        //initial_altitude_ = nh_private_.param<double>("initial_altitude", 1387.0); // default to Provo, UT
 
         // ROS Publishers
         //GNSS_pub_ = nh_.advertise<rosflight_msgs::GNSS>(gnss_topic_, 1);
-        GNSS_fix_pub_ = nh_.advertise<sensor_msgs::NavSatFix>(gnss_fix_topic_, 1);
+        //GNSS_fix_pub_ = nh_.advertise<sensor_msgs::NavSatFix>(gnss_fix_topic_, 1);
         //GNSS_vel_pub_ = nh_.advertise<geometry_msgs::TwistStamped>(gnss_vel_topic_, 1);
         SAR_ground_truth_image_pub_ = nh_.advertise<sensor_msgs::Image>(sar_truth_image_topic_, 1);
         SAR_camera_view_pub_ = nh_.advertise<georegistration_testbed::SARCameraView>(sar_camera_view_topic_, 1);
@@ -234,13 +234,13 @@ namespace rosradar_plugins {
 
         // disable noise by zeroing the standard deviation of the noise
         if (!noise_on_) {
-            north_stdev_ = 0;
-            east_stdev_ = 0;
-            alt_stdev_ = 0;
-            velocity_stdev_ = 0;
-            north_k_SAR_ = 0;
-            east_k_SAR_ = 0;
-            alt_k_SAR_ = 0;
+            x_stddev_ = 0;
+            y_stddev_ = 0;
+            z_stddev_ = 0;
+            velocity_stddev_ = 0;
+            roll_stddev_ = 0;
+            pitch_stddev_ = 0;
+            yaw_stddev_ = 0;
         }
 
         // Fill static members of SAR message.
@@ -251,9 +251,12 @@ namespace rosradar_plugins {
         gnss_fix_message_.status.status = sensor_msgs::NavSatStatus::STATUS_FIX;
 
         // initialize SAR error to zero
-        north_SAR_error_ = 0.0;
-        east_SAR_error_ = 0.0;
-        alt_SAR_error_ = 0.0;
+        x_error_ = 0.0;
+        y_error_ = 0.0;
+        z_error_ = 0.0;
+        roll_error_ = 0.0;
+        pitch_error_ = 0.0;
+        yaw_error_ = 0.0;
 
         // Listen to the update event. This event is broadcast every simulation iteration.
         updateConnection_ = gazebo::event::Events::ConnectWorldUpdateBegin(std::bind(&SARPlugin::OnUpdate, this, std::placeholders::_1));
@@ -266,21 +269,24 @@ namespace rosradar_plugins {
         gazebo::common::Time current_time = GZ_COMPAT_GET_SIM_TIME(world_);
         if ((current_time - last_time_).Double() >= sample_time_) {
             // Add noise per Gauss-Markov Process (p. 139 UAV Book)
-            double noise = north_stdev_ * standard_normal_distribution_(random_generator_);
-            north_SAR_error_ = exp(-1.0 * north_k_SAR_ * sample_time_) * north_SAR_error_ + noise*sample_time_;
-
-            noise = east_stdev_ * standard_normal_distribution_(random_generator_);
-            east_SAR_error_ = exp(-1.0 * east_k_SAR_ * sample_time_) * east_SAR_error_ + noise*sample_time_;
-
-            noise = alt_stdev_ * standard_normal_distribution_(random_generator_);
-            alt_SAR_error_ = exp(-1.0 * alt_k_SAR_ * sample_time_) * alt_SAR_error_ + noise*sample_time_;
+            cv::Mat_<double> noiseXYZ_position(3, 1);
+            noiseXYZ_position.at<double>(0,0) = x_stddev_ * standard_normal_distribution_(random_generator_);
+            //north_SAR_error_ = exp(-1.0 * north_k_SAR_ * sample_time_) * north_SAR_error_ + noise*sample_time_;
+            noiseXYZ_position.at<double>(1,0) = y_stddev_ * standard_normal_distribution_(random_generator_);
+            //east_SAR_error_ = exp(-1.0 * east_k_SAR_ * sample_time_) * east_SAR_error_ + noise*sample_time_;
+            noiseXYZ_position.at<double>(2,0) = z_stddev_ * standard_normal_distribution_(random_generator_);
+            //alt_SAR_error_ = exp(-1.0 * alt_k_SAR_ * sample_time_) * alt_SAR_error_ + noise*sample_time_;
+            
+            double noise_roll = roll_stddev_ * standard_normal_distribution_(random_generator_);
+            double noise_pitch = pitch_stddev_ * standard_normal_distribution_(random_generator_);
+            double noise_yaw = yaw_stddev_ * standard_normal_distribution_(random_generator_);
 
             // Find NED position in meters
             // Get the Center of Gravity (CoG) pose
-            GazeboPose W_pose_W_C = GZ_COMPAT_GET_WORLD_COG_POSE(link_);
-            double pn = GZ_COMPAT_GET_X(GZ_COMPAT_GET_POS(W_pose_W_C)) + north_SAR_error_;
-            double pe = -GZ_COMPAT_GET_Y(GZ_COMPAT_GET_POS(W_pose_W_C)) + east_SAR_error_;
-            double h = GZ_COMPAT_GET_Z(GZ_COMPAT_GET_POS(W_pose_W_C)) + alt_SAR_error_;
+            //GazeboPose W_pose_W_C = GZ_COMPAT_GET_WORLD_COG_POSE(link_);
+            //double pn = GZ_COMPAT_GET_X(GZ_COMPAT_GET_POS(W_pose_W_C)) + north_SAR_error_;
+            //double pe = -GZ_COMPAT_GET_Y(GZ_COMPAT_GET_POS(W_pose_W_C)) + east_SAR_error_;
+            //double h = GZ_COMPAT_GET_Z(GZ_COMPAT_GET_POS(W_pose_W_C)) + alt_SAR_error_;
 
             if (hasReferenceImage) {
                 cv::Mat_<double> ground_plane_orientation(3, 3);
@@ -313,6 +319,8 @@ namespace rosradar_plugins {
                 cv::Mat_<double> antenna_position(3, 1);
                 //gzModelPoseToOpenCV(link_, antenna_orientation, antenna_position);
                 gzModelPoseToOpenCV(link_antenna_pose_, antenna_orientation, antenna_position);
+                
+                
                 cv::Mat antennaXVec = antenna_orientation.col(0);
                 // the antennaYVec and antennaZVec determine the image plane (X,Y) axes in 3D
                 cv::Mat antennaYVec = antenna_orientation.col(2);
@@ -328,8 +336,17 @@ namespace rosradar_plugins {
                         sar_cameraview_.pose[r * 4 + c] = camera_orientation.at<double>(r, c);
                     }
                 }
+
+                for (int c = 0; c < antenna_orientation.cols; c++) {
+                    for (int r = 0; r < antenna_orientation.rows; r++) {
+                        sar_cameraview_.pose_w_noise[r * 4 + c] = camera_orientation.at<double>(r, c);
+                    }
+                }
                 for (int r = 0; r < antenna_position.rows; r++) {
                     sar_cameraview_.pose[r * 4 + 3] = antenna_position.at<double>(r, 0);
+                }
+                for (int r = 0; r < antenna_position.rows; r++) {
+                    sar_cameraview_.pose_w_noise[r * 4 + 3] = antenna_position.at<double>(r, 0) + noiseXYZ_position.at<double>(r, 0);
                 }
                 //double focal_length = 12.0e-3; // m
                 cv::Mat pixel_size = (cv::Mat_<double>(2, 1) << sar_camera_focal_length_ / sar_camera_fx_, sar_camera_focal_length_ / sar_camera_fy_);
@@ -476,6 +493,12 @@ namespace rosradar_plugins {
                                 sar_cameraview_.homography[r * H.cols + c] = H.at<double>(r, c);
                             }
                         }
+                        for (int r = 0; r < H.rows; r++) {
+                            for (int c = 0; c < H.cols; c++) {
+                                sar_cameraview_.homography_w_noise[r * H.cols + c] = H.at<double>(r, c);
+                            }
+                        }
+
                         sar_cameraview_.header.stamp.fromSec(GZ_COMPAT_GET_SIM_TIME(world_).Double());
                         //std::cout << "H:\n" << H << std::endl;
 
@@ -525,64 +548,64 @@ namespace rosradar_plugins {
                 }
             }
             // Convert meters to SAR angle
-            double dlat, dlon;
-            convertNorthEastToWGS84(pn, pe, dlat, dlon);
-            double latitude_deg = initial_latitude_ + dlat * 180.0 / M_PI;
-            double longitude_deg = initial_longitude_ + dlon * 180.0 / M_PI;
+            //double dlat, dlon;
+            //convertNorthEastToWGS84(pn, pe, dlat, dlon);
+            //double latitude_deg = initial_latitude_ + dlat * 180.0 / M_PI;
+            //double longitude_deg = initial_longitude_ + dlon * 180.0 / M_PI;
 
             // Altitude
-            double altitude = initial_altitude_ + h;
+            //double altitude = initial_altitude_ + h;
 
             // Get Ground Speed
-            ignition::math::Vector3d C_linear_velocity_W_C = GZ_COMPAT_IGN_VECTOR(GZ_COMPAT_GET_WORLD_LINEAR_VEL(link_));
-            double north_vel = C_linear_velocity_W_C.X();
-            double east_vel = -C_linear_velocity_W_C.Y();
-            double Vg = sqrt(north_vel * north_vel + east_vel * east_vel);
-            double sigma_vg =
-                    sqrt((north_vel * north_vel * north_stdev_ * north_stdev_ +
-                    east_vel * east_vel * east_stdev_ * east_stdev_) /
-                    (north_vel * north_vel + east_vel * east_vel));
-            double ground_speed_error = sigma_vg * standard_normal_distribution_(random_generator_);
-            double ground_speed = Vg + ground_speed_error;
+            //ignition::math::Vector3d C_linear_velocity_W_C = GZ_COMPAT_IGN_VECTOR(GZ_COMPAT_GET_WORLD_LINEAR_VEL(link_));
+            //double north_vel = C_linear_velocity_W_C.X();
+            //double east_vel = -C_linear_velocity_W_C.Y();
+            //double Vg = sqrt(north_vel * north_vel + east_vel * east_vel);
+            //double sigma_vg =
+            //        sqrt((north_vel * north_vel * north_stdev_ * north_stdev_ +
+            //        east_vel * east_vel * east_stdev_ * east_stdev_) /
+            //        (north_vel * north_vel + east_vel * east_vel));
+            //double ground_speed_error = sigma_vg * standard_normal_distribution_(random_generator_);
+            //double ground_speed = Vg + ground_speed_error;
 
             // Get Course Angle
-            double psi = -GZ_COMPAT_GET_Z(GZ_COMPAT_GET_EULER(GZ_COMPAT_GET_ROT(W_pose_W_C)));
-            double dx = Vg * cos(psi);
-            double dy = Vg * sin(psi);
-            double chi = atan2(dy, dx);
-            double sigma_chi = sqrt((dx * dx * north_stdev_ * north_stdev_ + dy * dy * east_stdev_ * east_stdev_) / ((dx * dx + dy * dy)*(dx * dx + dy * dy)));
-            double chi_error = sigma_chi * standard_normal_distribution_(random_generator_);
-            double ground_course_rad = chi + chi_error;
+            //double psi = -GZ_COMPAT_GET_Z(GZ_COMPAT_GET_EULER(GZ_COMPAT_GET_ROT(W_pose_W_C)));
+            //double dx = Vg * cos(psi);
+            //double dy = Vg * sin(psi);
+            //double chi = atan2(dy, dx);
+            //double sigma_chi = sqrt((dx * dx * north_stdev_ * north_stdev_ + dy * dy * east_stdev_ * east_stdev_) / ((dx * dx + dy * dy)*(dx * dx + dy * dy)));
+            //double chi_error = sigma_chi * standard_normal_distribution_(random_generator_);
+            //double ground_course_rad = chi + chi_error;
 
             //Calculate other values for messages
-            ignition::math::Angle lat_angle(deg_to_rad(initial_latitude_));
-            ignition::math::Angle lon_angle(deg_to_rad(initial_longitude_));
-            gazebo::common::SphericalCoordinates spherical_coordinates(
-                    gazebo::common::SphericalCoordinates::SurfaceType::EARTH_WGS84, lat_angle, lon_angle, initial_altitude_,
-                    ignition::math::Angle::Zero);
-            ignition::math::Vector3d lla_position_with_error(deg_to_rad(latitude_deg), deg_to_rad(longitude_deg), altitude);
-            ignition::math::Vector3d ecef_position = spherical_coordinates.PositionTransform(lla_position_with_error,
-                    gazebo::common::SphericalCoordinates::CoordinateType::SPHERICAL,
-                    gazebo::common::SphericalCoordinates::CoordinateType::ECEF);
+            //ignition::math::Angle lat_angle(deg_to_rad(initial_latitude_));
+            //ignition::math::Angle lon_angle(deg_to_rad(initial_longitude_));
+            //gazebo::common::SphericalCoordinates spherical_coordinates(
+            //        gazebo::common::SphericalCoordinates::SurfaceType::EARTH_WGS84, lat_angle, lon_angle, initial_altitude_,
+            //        ignition::math::Angle::Zero);
+            //ignition::math::Vector3d lla_position_with_error(deg_to_rad(latitude_deg), deg_to_rad(longitude_deg), altitude);
+            //ignition::math::Vector3d ecef_position = spherical_coordinates.PositionTransform(lla_position_with_error,
+            //        gazebo::common::SphericalCoordinates::CoordinateType::SPHERICAL,
+            //        gazebo::common::SphericalCoordinates::CoordinateType::ECEF);
 
-            ignition::math::Vector3d position = GZ_COMPAT_GET_POS(GZ_COMPAT_GET_WORLD_POSE(link_));
-            ignition::math::Quaterniond quat_orientation = GZ_COMPAT_GET_ROT(GZ_COMPAT_GET_WORLD_POSE(link_));
+            //ignition::math::Vector3d position = GZ_COMPAT_GET_POS(GZ_COMPAT_GET_WORLD_POSE(link_));
+            //ignition::math::Quaterniond quat_orientation = GZ_COMPAT_GET_ROT(GZ_COMPAT_GET_WORLD_POSE(link_));
 
-            ignition::math::Vector3d nwu_vel = GZ_COMPAT_IGN_VECTOR(GZ_COMPAT_GET_WORLD_LINEAR_VEL(link_));
-            ignition::math::Vector3d enu_vel(-nwu_vel.Y(), nwu_vel.X(), nwu_vel.Z());
-            ignition::math::Vector3d enu_vel_with_noise = enu_vel;
-            enu_vel_with_noise.X() += velocity_stdev_ * standard_normal_distribution_(random_generator_);
-            enu_vel_with_noise.Y() += velocity_stdev_ * standard_normal_distribution_(random_generator_);
-            enu_vel_with_noise.Z() += velocity_stdev_ * standard_normal_distribution_(random_generator_);
-            ignition::math::Vector3d ecef_velocity = spherical_coordinates.VelocityTransform(enu_vel_with_noise,
-                    gazebo::common::SphericalCoordinates::CoordinateType::GLOBAL,
-                    gazebo::common::SphericalCoordinates::CoordinateType::ECEF);
+            //ignition::math::Vector3d nwu_vel = GZ_COMPAT_IGN_VECTOR(GZ_COMPAT_GET_WORLD_LINEAR_VEL(link_));
+            //ignition::math::Vector3d enu_vel(-nwu_vel.Y(), nwu_vel.X(), nwu_vel.Z());
+            //ignition::math::Vector3d enu_vel_with_noise = enu_vel;
+            //enu_vel_with_noise.X() += velocity_stddev_ * standard_normal_distribution_(random_generator_);
+            //enu_vel_with_noise.Y() += velocity_stddev_ * standard_normal_distribution_(random_generator_);
+            //enu_vel_with_noise.Z() += velocity_stddev_ * standard_normal_distribution_(random_generator_);
+            //ignition::math::Vector3d ecef_velocity = spherical_coordinates.VelocityTransform(enu_vel_with_noise,
+            //        gazebo::common::SphericalCoordinates::CoordinateType::GLOBAL,
+            //        gazebo::common::SphericalCoordinates::CoordinateType::ECEF);
 
             //Fill the GNSS message
             //gnss_message_.position[0] = ecef_position.X();
             //gnss_message_.position[1] = ecef_position.Y();
             //gnss_message_.position[2] = ecef_position.Z();
-            //gnss_message_.speed_accuracy = velocity_stdev_;
+            //gnss_message_.speed_accuracy = velocity_stddev_;
             //gnss_message_.vertical_accuracy = alt_stdev_;
             //gnss_message_.horizontal_accuracy = north_stdev_ > east_stdev_ ? north_stdev_ : east_stdev_;
             //gnss_message_.velocity[0] = ecef_velocity.X();
@@ -590,13 +613,13 @@ namespace rosradar_plugins {
             //gnss_message_.velocity[2] = ecef_velocity.Z();
 
             //Fill the NavSatFix message
-            gnss_fix_message_.latitude = latitude_deg;
-            gnss_fix_message_.longitude = longitude_deg;
-            gnss_fix_message_.altitude = altitude;
-            gnss_fix_message_.position_covariance[0] = north_stdev_;
-            gnss_fix_message_.position_covariance[4] = east_stdev_;
-            gnss_fix_message_.position_covariance[8] = alt_stdev_;
-            gnss_fix_message_.position_covariance_type = sensor_msgs::NavSatFix::COVARIANCE_TYPE_DIAGONAL_KNOWN;
+            //gnss_fix_message_.latitude = latitude_deg;
+            //gnss_fix_message_.longitude = longitude_deg;
+            //gnss_fix_message_.altitude = altitude;
+            //gnss_fix_message_.position_covariance[0] = north_stdev_;
+            //gnss_fix_message_.position_covariance[4] = east_stdev_;
+            //gnss_fix_message_.position_covariance[8] = alt_stdev_;
+            //gnss_fix_message_.position_covariance_type = sensor_msgs::NavSatFix::COVARIANCE_TYPE_DIAGONAL_KNOWN;
 
             //Fill the TwistStamped
             //gnss_vel_message_.twist.linear.x = ground_speed * cos(ground_course_rad);
@@ -609,12 +632,12 @@ namespace rosradar_plugins {
             //gnss_message_.time = gnss_message_.header.stamp;
             //gnss_vel_message_.header.stamp = gnss_message_.header.stamp;
             //gnss_fix_message_.header.stamp = gnss_message_.header.stamp;
-            gnss_fix_message_.header.stamp.fromSec(GZ_COMPAT_GET_SIM_TIME(world_).Double());
+            //gnss_fix_message_.header.stamp.fromSec(GZ_COMPAT_GET_SIM_TIME(world_).Double());
 
 
             // Publish
             //GNSS_pub_.publish(gnss_message_);
-            GNSS_fix_pub_.publish(gnss_fix_message_);
+            //GNSS_fix_pub_.publish(gnss_fix_message_);
             //GNSS_vel_pub_.publish(gnss_vel_message_);
 
 
@@ -626,14 +649,14 @@ namespace rosradar_plugins {
 
     // this assumes a plane tangent to spherical earth at initial lat/lon
 
-    void SARPlugin::convertNorthEastToWGS84(double dpn, double dpe, double& dlat, double& dlon) {
-
-        static const double Re = 6371000.0; // radius of earth in meters
-        double R = Re + initial_altitude_; // current radius from earth center
-
-        dlat = asin(dpn / R);
-        dlon = asin(dpe / (R * cos(initial_latitude_ * M_PI / 180.0)));
-    }
+//    void SARPlugin::convertNorthEastToWGS84(double dpn, double dpe, double& dlat, double& dlon) {
+//
+//        static const double Re = 6371000.0; // radius of earth in meters
+//        double R = Re + initial_altitude_; // current radius from earth center
+//
+//        dlat = asin(dpn / R);
+//        dlon = asin(dpe / (R * cos(initial_latitude_ * M_PI / 180.0)));
+//    }
 
     void SARPlugin::gzModelPoseToOpenCV(gazebo::physics::EntityPtr _entity, cv::Mat& orientation, cv::Mat & position) {
         ignition::math::Pose3d gz_pose = _entity->WorldPose();
@@ -642,7 +665,6 @@ namespace rosradar_plugins {
         double normf = sqrt(1.0 - quat.W() * quat.W());
         double EPS_TOL = 1.0e-4;
         if (normf < EPS_TOL) {
-
             normf = 1.0;
         }
         double angle = 2 * acos(quat.W());

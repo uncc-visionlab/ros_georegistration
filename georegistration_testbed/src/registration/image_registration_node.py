@@ -34,7 +34,7 @@ class ROSImageRegistrationNode(object):
     
     def __init__(self):
         # Debug and visualization flags
-        self.DEBUG = False
+        self.DEBUG = True
         self.ROS_VISUALIZE_SENSOR_VIEW_FRUSTUM = True
         self.VISUALIZE_TRAJECTORY = True
         self.USE_REFERENCE_FOR_TRAJECTORY = False
@@ -98,6 +98,8 @@ class ROSImageRegistrationNode(object):
         self.rgb_truth_homography_pub = rospy.Publisher('sar_registered/truth_rgb_homography_image', Image, queue_size=1)
         self.registered_result_pub = rospy.Publisher('sar_registered/fused_registration_image', Image, queue_size=1)
         
+        self.frame_id = 0
+
         self.pinhole_camera_model = PinholeCameraModel()
         rospy.loginfo('image_registration::Reference Inputfile = %s' % str(self.reference_image_filename))
         if (self.reference_image_filename):
@@ -200,6 +202,8 @@ class ROSImageRegistrationNode(object):
 
     def sarCameraViewCallback(self, camera_view_msg):
         MIN_IMAGE_DIMENSION = 50
+        self.frame_id = camera_view_msg.header.seq
+
         try:
             if (self.image_ref is None):
                 return
@@ -282,9 +286,20 @@ class ROSImageRegistrationNode(object):
             #Hrgb_ref_truth = Hrgb_ref_truth / Hrgb_ref_truth[2, 2]
             Hrgb_bbox_truth = cv2.getPerspectiveTransform(np.float32(bbox_poly.transpose()), image_corners)
             Hrgb_bbox_truth = Hrgb_bbox_truth / Hrgb_bbox_truth[2, 2]
-            (ret, rotation_vector_tru, translation_vector_tru) = cv2.solvePnP(objectPoints=xyz_corners.transpose(),
-                                                                      imagePoints=image_corners, cameraMatrix=cameraK, 
-                                                                      distCoeffs=None, flags=cv2.SOLVEPNP_ITERATIVE) 
+            
+            #Haffine_rgb_ref_truth = cv2.getAffineTransform(np.float32(bbox_poly[:,:3].transpose()), image_corners[:3,:])
+            #print("Hperspective = %s" % Hrgb_bbox_truth)
+            #print("Haffine = %s" % Haffine_rgb_ref_truth)
+            #rospy.loginfo('image_registration::Image[%s], H_perspective = %s' % (str(self.frame_id), str(Hrgb_bbox_truth)))
+            #rospy.loginfo('image_registration::Image[%s], H_affine = %s' % (str(self.frame_id), str(Haffine_rgb_ref_truth)))
+
+            (ret, rotation_vector_tru, translation_vector_tru) = cv2.solvePnP(objectPoints=np.ascontiguousarray(xyz_corners.transpose().reshape((4,1,3))),
+                                                                      imagePoints=np.ascontiguousarray(image_corners).reshape((4,1,2)), cameraMatrix=cameraK, 
+                                                                      distCoeffs=None, flags=cv2.SOLVEPNP_P3P) 
+                                                                    # cv2.SOLVEPNP_ITERATIVE, cv2.SOLVEPNP_P3P, 
+                                                                    # cv2.SOLVEPNP_EPNP, cv2.SOLVEPNP_DLS
+
+
                 #, useExtrinsicGuess=True, rvec=rvec0, tvec=T0)
             (poseRMatrix_tru, Rjacobian_tru) = cv2.Rodrigues(rotation_vector_tru)
             poseTransform_tru = np.eye(4)
@@ -303,6 +318,12 @@ class ROSImageRegistrationNode(object):
             if (self.register_moving_image is not None and 
                 np.min(self.register_moving_image.shape[:2]) > MIN_IMAGE_DIMENSION and
                 np.min(self.register_fixed_image.shape[:2]) > MIN_IMAGE_DIMENSION):
+                    
+                #print('Saving image registration_fixed_image_excerpt_%s.png' % str(self.frame_id))
+                #cv2.imwrite('registration_fixed_image_excerpt_'+str(self.frame_id)+'.png', self.register_fixed_image)
+                #print('Saving image '+'registration_moving_image_%s.png' % str(self.frame_id))
+                #cv2.imwrite('registration_moving_image_'+str(self.frame_id)+'.png', self.register_moving_image)
+                
                 #detectList = ["ORB","GFTT","FAST","BRISK","SURF","SIFT"]
                 #descriptList = ["ORB","SURF","SIFT","BRISK","BOOST"]
                 if (self.ALGORITHM == Algorithm.OPENCV_FEATURES):
@@ -415,6 +436,8 @@ class ROSImageRegistrationNode(object):
                     cv2.imshow(window_title, img)
                     cv2.resizeWindow(window_title, 600, 600)
                     cv2.waitKey(5)
+                    #print('Saving image '+'registration_result_image_'+str(self.frame_id)+'.png')
+                    #cv2.imwrite('registration_result_image_'+str(self.frame_id)+'.png', img)
 
                 if (self.VISUALIZE_TRAJECTORY == True):
                     self.visualizeTrajectory(current_coordinate)

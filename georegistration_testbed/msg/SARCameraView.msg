@@ -8,4 +8,5 @@ float32[] plane_xyz_coords
 float32[] K
 float32[] homography
 float32[] pose
-
+float32[] homography_w_noise
+float32[] pose_w_noise

@@ -73,7 +73,7 @@ namespace rosradar_plugins {
         // Topic
         //std::string gnss_topic_;
         //std::string gnss_vel_topic_;
-        std::string gnss_fix_topic_;
+        //std::string gnss_fix_topic_;
         std::string sar_camera_view_topic_;
         std::string sar_image_topic_;
         std::string sar_truth_image_topic_;
@@ -99,26 +99,29 @@ namespace rosradar_plugins {
         
         // params
         double pub_rate_;
+        
         bool noise_on_;
-        double north_stdev_;
-        double east_stdev_;
-        double alt_stdev_;
-        double velocity_stdev_;
+        double x_stddev_;
+        double y_stddev_;
+        double z_stddev_;
+        double roll_stddev_;
+        double pitch_stddev_;
+        double yaw_stddev_;
+        double velocity_stddev_;
 
-        double north_k_SAR_;
-        double east_k_SAR_;
-        double alt_k_SAR_;
+        double x_error_;
+        double y_error_;
+        double z_error_;
+        double roll_error_;
+        double pitch_error_;
+        double yaw_error_;
 
-        double north_SAR_error_;
-        double east_SAR_error_;
-        double alt_SAR_error_;
+        //double initial_latitude_;
+        //double initial_longitude_;
+        //double initial_altitude_;
 
-        double initial_latitude_;
-        double initial_longitude_;
-        double initial_altitude_;
-
-        double length_latitude_;
-        double length_longitude_;
+        //double length_latitude_;
+        //double length_longitude_;
 
         double sample_time_;
 

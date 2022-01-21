@@ -5,6 +5,7 @@
     <arg name="mav_name"            default="fixedwing"/>
 
     <arg name="run_rviz"            default="true"/>
+    <arg name="run_registration"    default="true"/>
     <arg name="wait_param"          default="--wait"/>     
     
     <!-- UAV initial (X, Y, Z) position -->
@@ -43,7 +44,7 @@
     <arg name="world_file" default="$(arg GAZEBO_WORLD_FILE_A)"/>
 
     <!-- GAZEBO LAUNCH SECTION -->
-    <include file="$(find gazebo_ros)/launch/empty_world.launch">
+    <include file="$(find georegistration_testbed)/launch/empty_world.launch">
         <arg name="paused" value="true"/>
         <arg name="gui" value="true"/>
         <arg name="verbose" value="true"/>
@@ -87,10 +88,10 @@
     
     <!-- SELECT THE ONBOARD GEO-REFERENCED IMAGE AS ONBOARD_REFERENCE_IMAGE -->
     <!-- SELECT THE SENSOR SOURCE IMAGE FOR SIMULATED IMAGE DATA AS SENSOR_REFERENCE_IMAGE -->
-    <arg name="ONBOARD_REFERENCE_IMAGE" default="$(arg GMAPS_REFERENCE_IMAGE_FILE_D)"/>
-    <arg name="SENSOR_REFERENCE_IMAGE" default="$(arg SAR_REFERENCE_IMAGE_FILE_D)"/>
-    <arg name="MODEL_SIZE_X" default="$(arg MODEL_SIZE_X_D)"/>
-    <arg name="MODEL_SIZE_Y" default="$(arg MODEL_SIZE_Y_D)"/>
+    <arg name="ONBOARD_REFERENCE_IMAGE" default="$(arg GMAPS_REFERENCE_IMAGE_FILE_A)"/>
+    <arg name="SENSOR_REFERENCE_IMAGE" default="$(arg SAR_REFERENCE_IMAGE_FILE_A)"/>
+    <arg name="MODEL_SIZE_X" default="$(arg MODEL_SIZE_X_A)"/>
+    <arg name="MODEL_SIZE_Y" default="$(arg MODEL_SIZE_Y_A)"/>
     <arg name="DETECTOR" default="$(arg DETECT_ALGORITHM)"/>
     <arg name="EXTRACTOR" default="$(arg EXTRACT_ALGORITHM)"/>
     <rosparam param="sar/sar_texture_filename" subst_value="True" ns="$(arg mav_name)">$(arg SENSOR_REFERENCE_IMAGE)</rosparam>
@@ -185,7 +186,8 @@
 
         <!-- Image registration -->
         <arg name="base_path" value="$(find georegistration_testbed)/models"/>
-        <node name="image_registration_node" pkg="georegistration_testbed" type="image_registration_node.py" output="screen">
+        <node name="image_registration_node" pkg="georegistration_testbed" type="image_registration_node.py" output="screen"
+              if="$(arg run_registration)">
             <remap from="camera/image_raw"   to="camera/nadir/image_raw_throttled"/>
             <remap from="sar/image_raw"   to="sar/image_raw"/>
             <remap from="camera/camera_info" to="camera/nadir/camera_info"/>

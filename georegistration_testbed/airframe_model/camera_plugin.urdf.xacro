@@ -80,7 +80,7 @@
                     </image>
                     <clip>
                         <near>0.01</near>
-                        <far>2000</far>
+                        <far>8000</far>
                     </clip>
                     <noise>
                         <type>gaussian</type>

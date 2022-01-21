@@ -154,9 +154,8 @@ num_sats: 7
 
 # SAR
 sar: {
-noise_on: true,
-rate: 1.0,
-fix_topic: sar/fixtopic,
+rate: 0.1,
+#fix_topic: sar/fixtopic,
 #sar_camera_field_of_view_x: 30.0,
 #sar_camera_field_of_view_y: 30.0,
 sar_camera_focal_length: 0.012,
@@ -172,24 +171,14 @@ sar_camera_view_topic: sar/camera_view,
 sar_image_topic: sar/image_raw,
 sar_truth_image_topic: sar/truth/image_raw,
 ground_plane_model_name: ground_plane,
-#sar_texture_filename: /home/arwillis/NetBeansProjects/ROS_SARGeoregistration/ros_ws/src/rosgeoregistration/georegistration_testbed/models/AFRL_RWWI_SATELLITE/sat_sentinel-1-grd_-86.501005E_30.4804199957W_111319.490793m.png,
-#sar_texture_filename: /home/arwillis/NetBeansProjects/ROS_SARGeoregistration/ros_ws/src/rosgeoregistration/georegistration_testbed/models/CONCORD_SATELLITE/sat_sentinel-1-grd_-80.535865E_35.39569711W_111319.490793m.png,
-#sar_texture_filename: /home/arwillis/NetBeansProjects/ROS_SARGeoregistration/ros_ws/src/rosgeoregistration/georegistration_testbed/models/EGLIN_LIDAR_RANGE_SATELLITE/sat_sentinel-1-grd_-86.436442E_30.5632921348W_111319.490793m.png,
-#sar_texture_filename: /home/arwillis/NetBeansProjects/ROS_SARGeoregistration/ros_ws/src/rosgeoregistration/georegistration_testbed/models/ESTES_PARK_CO_SATELLITE/sat_sentinel-1-grd_-105.65672E_40.413872091W_111319.490793m.png,
-#sar_texture_filename: /home/arwillis/NetBeansProjects/ROS_SARGeoregistration/ros_ws/src/rosgeoregistration/georegistration_testbed/models/KREMMLING_CO_SATELLITE/sat_sentinel-1-grd_-106.398358E_40.2304160993W_111319.490793m.png,
-#sar_texture_filename: /home/arwillis/NetBeansProjects/ROS_SARGeoregistration/ros_ws/src/rosgeoregistration/georegistration_testbed/models/UF_REEF_SATELLITE/sat_sentinel-1-grd_-86.572972E_30.4746875474W_111319.490793m.png,
-#sar_texture_filename: /home/arwillis/NetBeansProjects/ROS_SARGeoregistration/ros_ws/src/rosgeoregistration/georegistration_testbed/models/UNCC_EPIC_SATELLITE/sat_sentinel-1-grd_-80.741692E_35.309000385W_111319.490793m.png,
-north_stdev: 0.21,
-east_stdev: 0.21,
-alt_stdev: 0.40,
-velocity_stdev: 0.1,
-k_north: 0.0009090909, # 1/1100
-k_east: 0.0009090909, # 1/1100
-k_alt: 0.0009090909, # 1/1100
-initial_latitude: 40.267320,
-initial_longitude: -111.635629,
-initial_altitude: 1387.0,
-num_sats: 7
+noise_on: true,
+x_stddev: 0.0,
+y_stddev: 0.0,
+z_stddev: 0.0,
+velocity_stddev: 0.1,
+roll_stddev: 0.0,
+pitch_stddev: 0.0,
+yaw_stddev: 0.0
 }
 
 #
