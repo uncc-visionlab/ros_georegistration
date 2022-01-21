@@ -28,6 +28,7 @@
 #include <sensor_msgs/image_encodings.h>
 #include <geometry_msgs/Vector3.h>
 #include <opencv2/calib3d.hpp>
+#include <opencv2/core/mat.hpp>
 
 #define DEBUG 0
 
@@ -268,395 +269,308 @@ namespace rosradar_plugins {
         // check if time to publish
         gazebo::common::Time current_time = GZ_COMPAT_GET_SIM_TIME(world_);
         if ((current_time - last_time_).Double() >= sample_time_) {
-            // Add noise per Gauss-Markov Process (p. 139 UAV Book)
-            cv::Mat_<double> noiseXYZ_position(3, 1);
-            noiseXYZ_position.at<double>(0,0) = x_stddev_ * standard_normal_distribution_(random_generator_);
-            //north_SAR_error_ = exp(-1.0 * north_k_SAR_ * sample_time_) * north_SAR_error_ + noise*sample_time_;
-            noiseXYZ_position.at<double>(1,0) = y_stddev_ * standard_normal_distribution_(random_generator_);
-            //east_SAR_error_ = exp(-1.0 * east_k_SAR_ * sample_time_) * east_SAR_error_ + noise*sample_time_;
-            noiseXYZ_position.at<double>(2,0) = z_stddev_ * standard_normal_distribution_(random_generator_);
-            //alt_SAR_error_ = exp(-1.0 * alt_k_SAR_ * sample_time_) * alt_SAR_error_ + noise*sample_time_;
-            
-            double noise_roll = roll_stddev_ * standard_normal_distribution_(random_generator_);
-            double noise_pitch = pitch_stddev_ * standard_normal_distribution_(random_generator_);
-            double noise_yaw = yaw_stddev_ * standard_normal_distribution_(random_generator_);
+            last_time_ = current_time;
 
-            // Find NED position in meters
-            // Get the Center of Gravity (CoG) pose
-            //GazeboPose W_pose_W_C = GZ_COMPAT_GET_WORLD_COG_POSE(link_);
-            //double pn = GZ_COMPAT_GET_X(GZ_COMPAT_GET_POS(W_pose_W_C)) + north_SAR_error_;
-            //double pe = -GZ_COMPAT_GET_Y(GZ_COMPAT_GET_POS(W_pose_W_C)) + east_SAR_error_;
-            //double h = GZ_COMPAT_GET_Z(GZ_COMPAT_GET_POS(W_pose_W_C)) + alt_SAR_error_;
+            if (!hasReferenceImage) {
+                return;
+            }
+            cv::Mat_<double> ground_plane_orientation(3, 3);
+            cv::Mat_<double> ground_plane_position(3, 1);
+            gzModelPoseToOpenCV(ground_plane_model_, ground_plane_orientation, ground_plane_position);
+            // in Gazebo X = North, Y = West, Z = Up
+            cv::Mat orientedNormal = ground_plane_orientation * cv::Mat(plane_normal);
+            cv::Vec3d plane_u(1.0, 0.0, 0.0);
+            plane_u = plane_u - plane_u.dot(plane_normal) * plane_normal;
+            plane_u = plane_u / cv::norm(plane_u);
+            cv::Mat orientedUVec = ground_plane_orientation * cv::Mat(plane_u);
+            cv::Vec3d plane_v(0.0, -1.0, 0.0);
+            plane_v = plane_v - plane_v.dot(plane_normal) * plane_normal;
+            plane_v = plane_v / cv::norm(plane_v);
+            cv::Mat orientedVVec = ground_plane_orientation * cv::Mat(plane_v);
 
-            if (hasReferenceImage) {
-                cv::Mat_<double> ground_plane_orientation(3, 3);
-                cv::Mat_<double> ground_plane_position(3, 1);
-                gzModelPoseToOpenCV(ground_plane_model_, ground_plane_orientation, ground_plane_position);
-                // in Gazebo X = North, Y = West, Z = Up
-                cv::Mat orientedNormal = ground_plane_orientation * cv::Mat(plane_normal);
-                cv::Vec3d plane_u(1.0, 0.0, 0.0);
-                plane_u = plane_u - plane_u.dot(plane_normal) * plane_normal;
-                plane_u = plane_u / cv::norm(plane_u);
-                cv::Mat orientedUVec = ground_plane_orientation * cv::Mat(plane_u);
-                cv::Vec3d plane_v(0.0, -1.0, 0.0);
-                plane_v = plane_v - plane_v.dot(plane_normal) * plane_normal;
-                plane_v = plane_v / cv::norm(plane_v);
-                cv::Mat orientedVVec = ground_plane_orientation * cv::Mat(plane_v);
+            cv::Mat_<double> plane_corners(3, 4);
+            plane_corners.col(0) = ground_plane_position - 0.5 * plane_dimensions[0] * orientedUVec - 0.5 * plane_dimensions[1] * orientedVVec;
+            plane_corners.col(1) = ground_plane_position + 0.5 * plane_dimensions[0] * orientedUVec - 0.5 * plane_dimensions[1] * orientedVVec;
+            plane_corners.col(2) = ground_plane_position - 0.5 * plane_dimensions[0] * orientedUVec + 0.5 * plane_dimensions[1] * orientedVVec;
+            plane_corners.col(3) = ground_plane_position + 0.5 * plane_dimensions[0] * orientedUVec + 0.5 * plane_dimensions[1] * orientedVVec;
 
-                cv::Mat_<double> plane_corners(3, 4);
-                plane_corners.col(0) = ground_plane_position - 0.5 * plane_dimensions[0] * orientedUVec - 0.5 * plane_dimensions[1] * orientedVVec;
-                plane_corners.col(1) = ground_plane_position + 0.5 * plane_dimensions[0] * orientedUVec - 0.5 * plane_dimensions[1] * orientedVVec;
-                plane_corners.col(2) = ground_plane_position - 0.5 * plane_dimensions[0] * orientedUVec + 0.5 * plane_dimensions[1] * orientedVVec;
-                plane_corners.col(3) = ground_plane_position + 0.5 * plane_dimensions[0] * orientedUVec + 0.5 * plane_dimensions[1] * orientedVVec;
+            cv::Mat_<double> plane_coefficients(4, 1);
+            plane_coefficients.at<double>(0, 0) = plane_normal[0];
+            plane_coefficients.at<double>(1, 0) = plane_normal[1];
+            plane_coefficients.at<double>(2, 0) = plane_normal[2];
+            plane_coefficients.at<double>(3, 0) = -plane_normal.dot(ground_plane_position);
 
-                cv::Mat_<double> plane_coefficients(4, 1);
-                plane_coefficients.at<double>(0, 0) = plane_normal[0];
-                plane_coefficients.at<double>(1, 0) = plane_normal[1];
-                plane_coefficients.at<double>(2, 0) = plane_normal[2];
-                plane_coefficients.at<double>(3, 0) = -plane_normal.dot(ground_plane_position);
+            cv::Mat_<double> antenna_orientation(3, 3);
+            cv::Mat_<double> antenna_position(3, 1);
+            //gzModelPoseToOpenCV(link_, antenna_orientation, antenna_position);
+            gzModelPoseToOpenCV(link_antenna_pose_, antenna_orientation, antenna_position);
 
-                cv::Mat_<double> antenna_orientation(3, 3);
-                cv::Mat_<double> antenna_position(3, 1);
-                //gzModelPoseToOpenCV(link_, antenna_orientation, antenna_position);
-                gzModelPoseToOpenCV(link_antenna_pose_, antenna_orientation, antenna_position);
-                
-                
-                cv::Mat antennaXVec = antenna_orientation.col(0);
-                // the antennaYVec and antennaZVec determine the image plane (X,Y) axes in 3D
-                cv::Mat antennaYVec = antenna_orientation.col(2);
-                cv::Mat antennaZVec = antenna_orientation.col(1);
 
-                cv::Mat_<double> camera_orientation(3, 3);
-                camera_orientation.row(0) = antennaZVec.t();
-                camera_orientation.row(1) = antennaYVec.t();
-                camera_orientation.row(2) = antennaXVec.t();
-                sar_cameraview_.pose[15] = 1.0;
-                for (int c = 0; c < antenna_orientation.cols; c++) {
-                    for (int r = 0; r < antenna_orientation.rows; r++) {
-                        sar_cameraview_.pose[r * 4 + c] = camera_orientation.at<double>(r, c);
-                    }
-                }
+            cv::Mat antennaXVec = antenna_orientation.col(0);
+            // the antennaYVec and antennaZVec determine the image plane (X,Y) axes in 3D
+            cv::Mat antennaYVec = antenna_orientation.col(2);
+            cv::Mat antennaZVec = antenna_orientation.col(1);
 
-                for (int c = 0; c < antenna_orientation.cols; c++) {
-                    for (int r = 0; r < antenna_orientation.rows; r++) {
-                        sar_cameraview_.pose_w_noise[r * 4 + c] = camera_orientation.at<double>(r, c);
-                    }
-                }
-                for (int r = 0; r < antenna_position.rows; r++) {
-                    sar_cameraview_.pose[r * 4 + 3] = antenna_position.at<double>(r, 0);
-                }
-                for (int r = 0; r < antenna_position.rows; r++) {
-                    sar_cameraview_.pose_w_noise[r * 4 + 3] = antenna_position.at<double>(r, 0) + noiseXYZ_position.at<double>(r, 0);
-                }
-                //double focal_length = 12.0e-3; // m
-                cv::Mat pixel_size = (cv::Mat_<double>(2, 1) << sar_camera_focal_length_ / sar_camera_fx_, sar_camera_focal_length_ / sar_camera_fy_);
-                cv::Mat xy_resolution = (cv::Mat_<double>(2, 1) << sar_image_resolution_x_, sar_image_resolution_y_);
-                sar_cameraview_.K[0] = sar_camera_fx_;
-                sar_cameraview_.K[4] = sar_camera_fy_;
-                sar_cameraview_.K[2] = sar_image_resolution_x_ / 2;
-                sar_cameraview_.K[5] = sar_image_resolution_y_ / 2;
-                sar_cameraview_.K[8] = 1.0;
-                cv::Mat sensor_physical_dims = (cv::Mat_<double>(2, 1)
-                        << pixel_size.at<double>(0) * xy_resolution.at<double>(0),
-                        pixel_size.at<double>(1) * xy_resolution.at<double>(1));
+            cv::Mat_<double> camera_orientation(3, 3);
+            camera_orientation.row(0) = antennaZVec.t();
+            camera_orientation.row(1) = antennaYVec.t();
+            camera_orientation.row(2) = antennaXVec.t();
 
-                // convert pixel coords to physical coords
-                //cv::Mat sar_sensor_phase_center_position = (cv::Mat_<double>(3, 1) << pn, pe, h);
-                cv::Mat_<double> sar_sensor_corners_physical(3, 4);
-                //sar_sensor_corners_physical.col(0) = antenna_position - 0.5 * sensor_physical_dims.at<double>(0) * antennaZVec - 0.5 * sensor_physical_dims.at<double>(1) * antennaYVec + sar_camera_focal_length_*antennaXVec;
-                //sar_sensor_corners_physical.col(1) = antenna_position + 0.5 * sensor_physical_dims.at<double>(0) * antennaZVec - 0.5 * sensor_physical_dims.at<double>(1) * antennaYVec + sar_camera_focal_length_*antennaXVec;
-                //sar_sensor_corners_physical.col(2) = antenna_position - 0.5 * sensor_physical_dims.at<double>(0) * antennaZVec + 0.5 * sensor_physical_dims.at<double>(1) * antennaYVec + sar_camera_focal_length_*antennaXVec;
-                //sar_sensor_corners_physical.col(3) = antenna_position + 0.5 * sensor_physical_dims.at<double>(0) * antennaZVec + 0.5 * sensor_physical_dims.at<double>(1) * antennaYVec + sar_camera_focal_length_*antennaXVec;
-                sar_sensor_corners_physical.col(0) = antenna_position + 0.5 * sensor_physical_dims.at<double>(0) * antennaZVec + 0.5 * sensor_physical_dims.at<double>(1) * antennaYVec + sar_camera_focal_length_*antennaXVec;
-                sar_sensor_corners_physical.col(1) = antenna_position - 0.5 * sensor_physical_dims.at<double>(0) * antennaZVec + 0.5 * sensor_physical_dims.at<double>(1) * antennaYVec + sar_camera_focal_length_*antennaXVec;
-                sar_sensor_corners_physical.col(2) = antenna_position + 0.5 * sensor_physical_dims.at<double>(0) * antennaZVec - 0.5 * sensor_physical_dims.at<double>(1) * antennaYVec + sar_camera_focal_length_*antennaXVec;
-                sar_sensor_corners_physical.col(3) = antenna_position - 0.5 * sensor_physical_dims.at<double>(0) * antennaZVec - 0.5 * sensor_physical_dims.at<double>(1) * antennaYVec + sar_camera_focal_length_*antennaXVec;
+            sar_cameraview_.pose[15] = 1.0;
 
-                //cv::Mat_<double> canonicalToGazebo(3,3);
-                //double angle = M_PI/2.0;
-                //cv::Mat rodriguesVec = (cv::Mat_<double>(3,1) << angle*antennaXVec.at<double>(0), angle*antennaXVec.at<double>(1), angle*antennaXVec.at<double>(2));
-                //cv::Rodrigues(rodriguesVec, canonicalToGazebo);
-                //sar_sensor_corners_physical = canonicalToGazebo*sar_sensor_corners_physical;
-
-#if DEBUG > 2
-                ROS_ERROR_NAMED("SAR_plugin", "position = (%f,%f,%f)",
-                        ground_plane_position.at<double>(0, 0), ground_plane_position.at<double>(1, 0), ground_plane_position.at<double>(2, 0));
-                ROS_ERROR_NAMED("SAR_plugin", "dimensions = (%f,%f)", plane_dimensions[0], plane_dimensions[1]);
-                ROS_ERROR_NAMED("SAR_plugin", "Oriented normal = (%f,%f,%f) normal = (%f,%f,%f)",
-                        orientedNormal.at<double>(0, 0), orientedNormal.at<double>(1, 0), orientedNormal.at<double>(2, 0),
-                        plane_normal[0], plane_normal[1], plane_normal[2]);
-                ROS_ERROR_NAMED("SAR_plugin", "orientedUVec = (%f,%f,%f)",
-                        orientedUVec.at<double>(0, 0), orientedUVec.at<double>(1, 0), orientedUVec.at<double>(2, 0));
-                ROS_ERROR_NAMED("SAR_plugin", "orientedVVec = (%f,%f,%f)",
-                        orientedVVec.at<double>(0, 0), orientedVVec.at<double>(1, 0), orientedVVec.at<double>(2, 0));
-                ROS_ERROR_NAMED("SAR_plugin", "c_nw = (%f,%f,%f)",
-                        plane_corners.at<double>(0, 0), plane_corners.at<double>(1, 0), plane_corners.at<double>(2, 0));
-                ROS_ERROR_NAMED("SAR_plugin", "c_ne = (%f,%f,%f)",
-                        plane_corners.at<double>(0, 1), plane_corners.at<double>(1, 1), plane_corners.at<double>(2, 1));
-                ROS_ERROR_NAMED("SAR_plugin", "c_sw = (%f,%f,%f)",
-                        plane_corners.at<double>(0, 2), plane_corners.at<double>(1, 2), plane_corners.at<double>(2, 2));
-                ROS_ERROR_NAMED("SAR_plugin", "c_se = (%f,%f,%f)",
-                        plane_corners.at<double>(0, 3), plane_corners.at<double>(1, 3), plane_corners.at<double>(2, 3));
-
-                ROS_ERROR_NAMED("SAR_plugin", "antenna_position = (%f,%f,%f)",
-                        antenna_position.at<double>(0), antenna_position.at<double>(1), antenna_position.at<double>(2));
-                //ROS_ERROR_NAMED("SAR_plugin", "noisy_antenna_position = (%f,%f,%f)",
-                //        sar_sensor_phase_center_position.at<double>(0), sar_sensor_phase_center_position.at<double>(1), sar_sensor_phase_center_position.at<double>(2));
-                ROS_ERROR_NAMED("SAR_plugin", "rf_propagation_axis = (%f,%f,%f)",
-                        antennaXVec.at<double>(0), antennaXVec.at<double>(1), antennaXVec.at<double>(2));
-                ROS_ERROR_NAMED("SAR_plugin", "antennaYVec = (%f,%f,%f)",
-                        antennaYVec.at<double>(0), antennaYVec.at<double>(1), antennaYVec.at<double>(2));
-                ROS_ERROR_NAMED("SAR_plugin", "antennaZVec = (%f,%f,%f)",
-                        antennaZVec.at<double>(0), antennaZVec.at<double>(1), antennaZVec.at<double>(2));
-#endif
-                // make vector into 3d world
-                cv::Mat_<double> ip(3, 1);
-                cv::Mat rp0 = antenna_position;
-                cv::Mat tp0 = plane_corners.col(0);
-                cv::Mat tp1 = plane_corners.col(1);
-                cv::Mat tp2 = plane_corners.col(2);
-                cv::Mat tp3 = plane_corners.col(3);
-
-                cv::Mat_<double> uv_texture_coords(2, 4);
-                bool validHomographyEstimate = true;
-                // find 3d intersection pt with plane 
-                // convert 3d intersection pt to pixel coordinate in textured image
-                for (int cornerIndex = 0; cornerIndex < 4; cornerIndex++) {
-                    cv::Mat rp1 = sar_sensor_corners_physical.col(cornerIndex);
-                    if (intersectRayPolygon(rp0, rp1, tp1, tp0, tp2, ip)) {
-                        uv_texture_coords.at<double>(0, cornerIndex) = orientedUVec.dot(ip - tp0) / plane_dimensions[0];
-                        uv_texture_coords.at<double>(1, cornerIndex) = orientedVVec.dot(ip - tp0) / plane_dimensions[1];
-                        sar_cameraview_.plane_xyz_coords[cornerIndex] = (float) ip.at<double>(0);
-                        sar_cameraview_.plane_xyz_coords[cornerIndex + 4] = (float) ip.at<double>(1);
-                        sar_cameraview_.plane_xyz_coords[cornerIndex + 8] = (float) ip.at<double>(2);
-                        //uv_texture_coords.at<double>(0, cornerIndex) = (ip.at<double>(0) - tp0.at<double>(0)) / plane_dimensions[0];
-                        //uv_texture_coords.at<double>(1, cornerIndex) = (ip.at<double>(1) - tp0.at<double>(1)) / plane_dimensions[1];
-#if DEBUG > 3
-                        ROS_ERROR_NAMED("SAR_plugin", "found intersection triangle[0] = (%f,%f,%f)",
-                                ip.at<double>(0), ip.at<double>(1), ip.at<double>(2));
-                        ROS_ERROR_NAMED("SAR_plugin", "uv[%d] = (%f,%f)",
-                                cornerIndex, uv_texture_coords.at<double>(0, cornerIndex), uv_texture_coords.at<double>(1, cornerIndex));
-#endif
-                    } else if (intersectRayPolygon(rp0, rp1, tp1, tp2, tp3, ip)) {
-                        uv_texture_coords.at<double>(0, cornerIndex) = orientedUVec.dot(ip - tp0) / plane_dimensions[0];
-                        uv_texture_coords.at<double>(1, cornerIndex) = orientedVVec.dot(ip - tp0) / plane_dimensions[1];
-                        sar_cameraview_.plane_xyz_coords[cornerIndex] = (float) ip.at<double>(0);
-                        sar_cameraview_.plane_xyz_coords[cornerIndex + 4] = (float) ip.at<double>(1);
-                        sar_cameraview_.plane_xyz_coords[cornerIndex + 8] = (float) ip.at<double>(2);
-                        //uv_texture_coords.at<double>(0, cornerIndex) = (ip.at<double>(0) - tp0.at<double>(0)) / plane_dimensions[0];
-                        //uv_texture_coords.at<double>(1, cornerIndex) = (ip.at<double>(1) - tp0.at<double>(1)) / plane_dimensions[1];
-#if DEBUG > 3
-                        ROS_ERROR_NAMED("SAR_plugin", "found intersection triangle[1] = (%f,%f,%f)",
-                                ip.at<double>(0), ip.at<double>(1), ip.at<double>(2));
-                        ROS_ERROR_NAMED("SAR_plugin", "uv[%d] = (%f,%f)",
-                                cornerIndex, uv_texture_coords.at<double>(0, cornerIndex), uv_texture_coords.at<double>(1, cornerIndex));
-#endif
-                    } else {
-                        uv_texture_coords.col(cornerIndex) = std::numeric_limits<double>::infinity();
-                        validHomographyEstimate = false;
-                    }
-                }
-                if (validHomographyEstimate) {
-                    // find the 4 corner pixel locations in the source image
-                    int iWidth = sar_image_resolution_x_, iHeight = sar_image_resolution_y_;
-                    std::vector<cv::Point2f> sar_pixel_coords_ground_plane(4);
-                    std::vector<cv::Point2f> sar_pixel_coords_uv(4);
-                    for (int cornerIndex = 0; cornerIndex < 4; cornerIndex++) {
-                        sar_pixel_coords_uv[cornerIndex] = cv::Point2f((float) uv_texture_coords.at<double>(0, cornerIndex),
-                                (float) uv_texture_coords.at<double>(1, cornerIndex));
-                        sar_pixel_coords_ground_plane[cornerIndex] = cv::Point2f((float) uv_texture_coords.at<double>(0, cornerIndex) * sar_reference_image_cv_.cols,
-                                (float) uv_texture_coords.at<double>(1, cornerIndex) * sar_reference_image_cv_.rows);
-                        sar_cameraview_.plane_uv_coords[cornerIndex] = uv_texture_coords.at<double>(0, cornerIndex);
-                        sar_cameraview_.plane_uv_coords[4 + cornerIndex] = uv_texture_coords.at<double>(1, cornerIndex);
-#if DEBUG > 3
-                        ROS_ERROR_NAMED("SAR_plugin", "sar_pixel_coords[%d] = (%f,%f)",
-                                cornerIndex, sar_pixel_coords_ground_plane[cornerIndex].x, sar_pixel_coords_ground_plane[cornerIndex].y);
-#endif
-                    }
-
-                    std::vector<cv::Point2f> sar_pixel_coords_rect_image(4);
-                    sar_pixel_coords_rect_image[0] = cv::Point2f(0, 0);
-                    sar_pixel_coords_rect_image[1] = cv::Point2f((float) iWidth - 1, 0);
-                    sar_pixel_coords_rect_image[2] = cv::Point2f(0, (float) iHeight - 1);
-                    sar_pixel_coords_rect_image[3] = cv::Point2f((float) iWidth - 1, (float) iHeight - 1);
-
-                    // call findHomography to estimate the homography
-                    //cv::Mat H = cv::findHomography(sar_pixel_coords_rect_image, sar_pixel_coords_ground_plane);
-                    cv::Mat H = cv::getPerspectiveTransform(sar_pixel_coords_ground_plane, sar_pixel_coords_rect_image);
-                    //cv::Mat H = cv::getPerspectiveTransform(sar_pixel_coords_rect_image, sar_pixel_coords_uv);
-                    if (H.cols != 3 || H.rows != 3) {
-                        validHomographyEstimate = false;
-                    }
-                    if (validHomographyEstimate) {
-                        for (int r = 0; r < H.rows; r++) {
-                            for (int c = 0; c < H.cols; c++) {
-                                sar_cameraview_.homography[r * H.cols + c] = H.at<double>(r, c);
-                            }
-                        }
-                        for (int r = 0; r < H.rows; r++) {
-                            for (int c = 0; c < H.cols; c++) {
-                                sar_cameraview_.homography_w_noise[r * H.cols + c] = H.at<double>(r, c);
-                            }
-                        }
-
-                        sar_cameraview_.header.stamp.fromSec(GZ_COMPAT_GET_SIM_TIME(world_).Double());
-                        //std::cout << "H:\n" << H << std::endl;
-
-                        // call warpPerspective to map the texture to a rectangular image
-                        // publish the warped image
-                        cv::Mat simulated_sar_image_warp, simulated_sar_image_final;
-                        cv::warpPerspective(sar_reference_image_cv_, simulated_sar_image_warp, H, cv::Size(iHeight, iWidth));
-                        //cv::Mat_<double> cc90Rotation = (cv::Mat_<double>(2,3) << 0, -1, 0, 1, 0, 0);       
-                        //cv::Point2f imageCenter = 0.5 * sar_pixel_coords_rect_image[3];
-                        // rotate image counter-clockwise 90 degrees around the image center (scale 1.0)
-                        //cv::Mat cc90Rotation = cv::getRotationMatrix2D(imageCenter, 90.0, 1.0);
-                        // flip the X-axis pixels
-                        //cc90Rotation.at<double>(0, 0) = -cc90Rotation.at<double>(0, 0);
-                        //cc90Rotation.at<double>(0, 1) = -cc90Rotation.at<double>(0, 1);
-                        //cc90Rotation.at<double>(0, 2) = cc90Rotation.at<double>(0, 2) + iWidth;
-                        // compute the new image
-                        //cv::warpAffine(simulated_sar_image_warp, simulated_sar_image_final, cc90Rotation, simulated_sar_image_warp.size());
-                        simulated_sar_image_final = simulated_sar_image_warp.clone();
-
-                        cv::Mat sar_reference_image_copy = sar_reference_image_cv_.clone();
-                        int lineType = cv::LINE_8;
-
-                        cv::Point polyPts[4] = {cv::Point(sar_pixel_coords_ground_plane[0]), cv::Point(sar_pixel_coords_ground_plane[1]),
-                            cv::Point(sar_pixel_coords_ground_plane[3]), cv::Point(sar_pixel_coords_ground_plane[2])};
-                        cv::fillConvexPoly(sar_reference_image_copy, polyPts, 4, cv::Scalar(0, 255, 0), lineType, 0);
-                        //cv::namedWindow("SAR Image", cv::WINDOW_NORMAL);
-                        //cv::imshow("SAR Image", simulated_sar_image_final);
-                        //cv::resizeWindow("SAR Image", 200, 200);
-                        //cv::waitKey(1);
-
-                        //imshow(sar_reference_image_copy);
-                        cv_bridge::CvImage sar_truth_img_msg;
-                        sar_truth_img_msg.image = sar_reference_image_copy;
-                        sar_truth_img_msg.header.stamp.fromSec(GZ_COMPAT_GET_SIM_TIME(world_).Double());
-                        sar_truth_img_msg.encoding = sensor_msgs::image_encodings::BGR8;
-
-                        SAR_ground_truth_image_pub_.publish(sar_truth_img_msg.toImageMsg());
-
-                        cv_bridge::CvImage sar_img_msg;
-                        sar_img_msg.image = simulated_sar_image_final;
-                        sar_img_msg.header.stamp.fromSec(GZ_COMPAT_GET_SIM_TIME(world_).Double());
-                        sar_img_msg.encoding = sensor_msgs::image_encodings::BGR8;
-
-                        SAR_image_pub_.publish(sar_img_msg.toImageMsg());
-                        SAR_camera_view_pub_.publish(sar_cameraview_);
-                    }
+            // compute ground truth pose
+            for (int c = 0; c < camera_orientation.cols; c++) {
+                for (int r = 0; r < camera_orientation.rows; r++) {
+                    sar_cameraview_.pose[r * 4 + c] = camera_orientation.at<double>(r, c);
                 }
             }
-            // Convert meters to SAR angle
-            //double dlat, dlon;
-            //convertNorthEastToWGS84(pn, pe, dlat, dlon);
-            //double latitude_deg = initial_latitude_ + dlat * 180.0 / M_PI;
-            //double longitude_deg = initial_longitude_ + dlon * 180.0 / M_PI;
+            for (int r = 0; r < antenna_position.rows; r++) {
+                sar_cameraview_.pose[r * 4 + 3] = antenna_position.at<double>(r, 0);
+            }
 
-            // Altitude
-            //double altitude = initial_altitude_ + h;
+            // compute pose with user-configured XYZ position and orientation noise 
+            cv::Mat_<double> noiseRPY_orientation = camera_orientation.clone();
+            //cv::Mat_<double> noiseRPY_orientation = cv::Mat_<double>::zeros(3, 3);
+            double noise_roll = roll_stddev_ * standard_normal_distribution_(random_generator_) * M_PI / 180.0;
+            double noise_pitch = pitch_stddev_ * standard_normal_distribution_(random_generator_) * M_PI / 180.0;
+            double noise_yaw = yaw_stddev_ * standard_normal_distribution_(random_generator_) * M_PI / 180.0;
+            noiseRPY_orientation.at<double>(0, 1) += -noise_yaw;
+            noiseRPY_orientation.at<double>(1, 0) += noise_yaw;
+            noiseRPY_orientation.at<double>(0, 2) += noise_pitch;
+            noiseRPY_orientation.at<double>(2, 0) += -noise_pitch;
+            noiseRPY_orientation.at<double>(1, 2) += -noise_roll;
+            noiseRPY_orientation.at<double>(2, 1) += noise_roll;
 
-            // Get Ground Speed
-            //ignition::math::Vector3d C_linear_velocity_W_C = GZ_COMPAT_IGN_VECTOR(GZ_COMPAT_GET_WORLD_LINEAR_VEL(link_));
-            //double north_vel = C_linear_velocity_W_C.X();
-            //double east_vel = -C_linear_velocity_W_C.Y();
-            //double Vg = sqrt(north_vel * north_vel + east_vel * east_vel);
-            //double sigma_vg =
-            //        sqrt((north_vel * north_vel * north_stdev_ * north_stdev_ +
-            //        east_vel * east_vel * east_stdev_ * east_stdev_) /
-            //        (north_vel * north_vel + east_vel * east_vel));
-            //double ground_speed_error = sigma_vg * standard_normal_distribution_(random_generator_);
-            //double ground_speed = Vg + ground_speed_error;
+            cv::SVD rotationSVD(noiseRPY_orientation, cv::SVD::FULL_UV); // constructor
+            for (int r = 0; r < rotationSVD.w.rows; r++) {
+                //std::cout << " replaced W diagonal value " << rotationSVD.w.at<double>(r) << " with 1." << std::endl;
+                rotationSVD.w.at<double>(r) = 1.0;
+            }
+            noiseRPY_orientation = rotationSVD.u * cv::Mat::diag(rotationSVD.w) * rotationSVD.vt;
+            //std::cout << "noiseRPY" << noiseRPY_orientation << std::endl;
+            for (int c = 0; c < noiseRPY_orientation.cols; c++) {
+                for (int r = 0; r < noiseRPY_orientation.rows; r++) {
+                    sar_cameraview_.pose_w_noise[r * 4 + c] = noiseRPY_orientation.at<double>(r, c);
+                }
+            }
+            sar_cameraview_.pose_w_noise[15] = 1.0;
 
-            // Get Course Angle
-            //double psi = -GZ_COMPAT_GET_Z(GZ_COMPAT_GET_EULER(GZ_COMPAT_GET_ROT(W_pose_W_C)));
-            //double dx = Vg * cos(psi);
-            //double dy = Vg * sin(psi);
-            //double chi = atan2(dy, dx);
-            //double sigma_chi = sqrt((dx * dx * north_stdev_ * north_stdev_ + dy * dy * east_stdev_ * east_stdev_) / ((dx * dx + dy * dy)*(dx * dx + dy * dy)));
-            //double chi_error = sigma_chi * standard_normal_distribution_(random_generator_);
-            //double ground_course_rad = chi + chi_error;
+            // Add noise per Gauss-Markov Process (p. 139 UAV Book)
+            cv::Mat_<double> noiseXYZ_position(3, 1);
+            noiseXYZ_position.at<double>(0, 0) = x_stddev_ * standard_normal_distribution_(random_generator_);
+            //north_SAR_error_ = exp(-1.0 * north_k_SAR_ * sample_time_) * north_SAR_error_ + noise*sample_time_;
+            noiseXYZ_position.at<double>(1, 0) = y_stddev_ * standard_normal_distribution_(random_generator_);
+            //east_SAR_error_ = exp(-1.0 * east_k_SAR_ * sample_time_) * east_SAR_error_ + noise*sample_time_;
+            noiseXYZ_position.at<double>(2, 0) = z_stddev_ * standard_normal_distribution_(random_generator_);
+            //alt_SAR_error_ = exp(-1.0 * alt_k_SAR_ * sample_time_) * alt_SAR_error_ + noise*sample_time_;
+            for (int r = 0; r < antenna_position.rows; r++) {
+                sar_cameraview_.pose_w_noise[r * 4 + 3] = antenna_position.at<double>(r, 0) + noiseXYZ_position.at<double>(r, 0);
+            }
 
-            //Calculate other values for messages
-            //ignition::math::Angle lat_angle(deg_to_rad(initial_latitude_));
-            //ignition::math::Angle lon_angle(deg_to_rad(initial_longitude_));
-            //gazebo::common::SphericalCoordinates spherical_coordinates(
-            //        gazebo::common::SphericalCoordinates::SurfaceType::EARTH_WGS84, lat_angle, lon_angle, initial_altitude_,
-            //        ignition::math::Angle::Zero);
-            //ignition::math::Vector3d lla_position_with_error(deg_to_rad(latitude_deg), deg_to_rad(longitude_deg), altitude);
-            //ignition::math::Vector3d ecef_position = spherical_coordinates.PositionTransform(lla_position_with_error,
-            //        gazebo::common::SphericalCoordinates::CoordinateType::SPHERICAL,
-            //        gazebo::common::SphericalCoordinates::CoordinateType::ECEF);
+            cv::Mat pixel_size = (cv::Mat_<double>(2, 1) << sar_camera_focal_length_ / sar_camera_fx_, sar_camera_focal_length_ / sar_camera_fy_);
+            cv::Mat xy_resolution = (cv::Mat_<double>(2, 1) << sar_image_resolution_x_, sar_image_resolution_y_);
+            sar_cameraview_.K[0] = sar_camera_fx_;
+            sar_cameraview_.K[4] = sar_camera_fy_;
+            sar_cameraview_.K[2] = sar_image_resolution_x_ / 2;
+            sar_cameraview_.K[5] = sar_image_resolution_y_ / 2;
+            sar_cameraview_.K[8] = 1.0;
+            cv::Mat sensor_physical_dims = (cv::Mat_<double>(2, 1)
+                    << pixel_size.at<double>(0) * xy_resolution.at<double>(0),
+                    pixel_size.at<double>(1) * xy_resolution.at<double>(1));
 
-            //ignition::math::Vector3d position = GZ_COMPAT_GET_POS(GZ_COMPAT_GET_WORLD_POSE(link_));
-            //ignition::math::Quaterniond quat_orientation = GZ_COMPAT_GET_ROT(GZ_COMPAT_GET_WORLD_POSE(link_));
+            // convert pixel coords to physical coords
+            //cv::Mat sar_sensor_phase_center_position = (cv::Mat_<double>(3, 1) << pn, pe, h);
+            cv::Mat_<double> sar_sensor_corners_physical(3, 4);
+            //sar_sensor_corners_physical.col(0) = antenna_position - 0.5 * sensor_physical_dims.at<double>(0) * antennaZVec - 0.5 * sensor_physical_dims.at<double>(1) * antennaYVec + sar_camera_focal_length_*antennaXVec;
+            //sar_sensor_corners_physical.col(1) = antenna_position + 0.5 * sensor_physical_dims.at<double>(0) * antennaZVec - 0.5 * sensor_physical_dims.at<double>(1) * antennaYVec + sar_camera_focal_length_*antennaXVec;
+            //sar_sensor_corners_physical.col(2) = antenna_position - 0.5 * sensor_physical_dims.at<double>(0) * antennaZVec + 0.5 * sensor_physical_dims.at<double>(1) * antennaYVec + sar_camera_focal_length_*antennaXVec;
+            //sar_sensor_corners_physical.col(3) = antenna_position + 0.5 * sensor_physical_dims.at<double>(0) * antennaZVec + 0.5 * sensor_physical_dims.at<double>(1) * antennaYVec + sar_camera_focal_length_*antennaXVec;
+            sar_sensor_corners_physical.col(0) = antenna_position + 0.5 * sensor_physical_dims.at<double>(0) * antennaZVec + 0.5 * sensor_physical_dims.at<double>(1) * antennaYVec + sar_camera_focal_length_*antennaXVec;
+            sar_sensor_corners_physical.col(1) = antenna_position - 0.5 * sensor_physical_dims.at<double>(0) * antennaZVec + 0.5 * sensor_physical_dims.at<double>(1) * antennaYVec + sar_camera_focal_length_*antennaXVec;
+            sar_sensor_corners_physical.col(2) = antenna_position + 0.5 * sensor_physical_dims.at<double>(0) * antennaZVec - 0.5 * sensor_physical_dims.at<double>(1) * antennaYVec + sar_camera_focal_length_*antennaXVec;
+            sar_sensor_corners_physical.col(3) = antenna_position - 0.5 * sensor_physical_dims.at<double>(0) * antennaZVec - 0.5 * sensor_physical_dims.at<double>(1) * antennaYVec + sar_camera_focal_length_*antennaXVec;
 
-            //ignition::math::Vector3d nwu_vel = GZ_COMPAT_IGN_VECTOR(GZ_COMPAT_GET_WORLD_LINEAR_VEL(link_));
-            //ignition::math::Vector3d enu_vel(-nwu_vel.Y(), nwu_vel.X(), nwu_vel.Z());
-            //ignition::math::Vector3d enu_vel_with_noise = enu_vel;
-            //enu_vel_with_noise.X() += velocity_stddev_ * standard_normal_distribution_(random_generator_);
-            //enu_vel_with_noise.Y() += velocity_stddev_ * standard_normal_distribution_(random_generator_);
-            //enu_vel_with_noise.Z() += velocity_stddev_ * standard_normal_distribution_(random_generator_);
-            //ignition::math::Vector3d ecef_velocity = spherical_coordinates.VelocityTransform(enu_vel_with_noise,
-            //        gazebo::common::SphericalCoordinates::CoordinateType::GLOBAL,
-            //        gazebo::common::SphericalCoordinates::CoordinateType::ECEF);
+            //cv::Mat_<double> canonicalToGazebo(3,3);
+            //double angle = M_PI/2.0;
+            //cv::Mat rodriguesVec = (cv::Mat_<double>(3,1) << angle*antennaXVec.at<double>(0), angle*antennaXVec.at<double>(1), angle*antennaXVec.at<double>(2));
+            //cv::Rodrigues(rodriguesVec, canonicalToGazebo);
+            //sar_sensor_corners_physical = canonicalToGazebo*sar_sensor_corners_physical;
 
-            //Fill the GNSS message
-            //gnss_message_.position[0] = ecef_position.X();
-            //gnss_message_.position[1] = ecef_position.Y();
-            //gnss_message_.position[2] = ecef_position.Z();
-            //gnss_message_.speed_accuracy = velocity_stddev_;
-            //gnss_message_.vertical_accuracy = alt_stdev_;
-            //gnss_message_.horizontal_accuracy = north_stdev_ > east_stdev_ ? north_stdev_ : east_stdev_;
-            //gnss_message_.velocity[0] = ecef_velocity.X();
-            //gnss_message_.velocity[1] = ecef_velocity.Y();
-            //gnss_message_.velocity[2] = ecef_velocity.Z();
+#if DEBUG > 2
+            ROS_ERROR_NAMED("SAR_plugin", "position = (%f,%f,%f)",
+                    ground_plane_position.at<double>(0, 0), ground_plane_position.at<double>(1, 0), ground_plane_position.at<double>(2, 0));
+            ROS_ERROR_NAMED("SAR_plugin", "dimensions = (%f,%f)", plane_dimensions[0], plane_dimensions[1]);
+            ROS_ERROR_NAMED("SAR_plugin", "Oriented normal = (%f,%f,%f) normal = (%f,%f,%f)",
+                    orientedNormal.at<double>(0, 0), orientedNormal.at<double>(1, 0), orientedNormal.at<double>(2, 0),
+                    plane_normal[0], plane_normal[1], plane_normal[2]);
+            ROS_ERROR_NAMED("SAR_plugin", "orientedUVec = (%f,%f,%f)",
+                    orientedUVec.at<double>(0, 0), orientedUVec.at<double>(1, 0), orientedUVec.at<double>(2, 0));
+            ROS_ERROR_NAMED("SAR_plugin", "orientedVVec = (%f,%f,%f)",
+                    orientedVVec.at<double>(0, 0), orientedVVec.at<double>(1, 0), orientedVVec.at<double>(2, 0));
+            ROS_ERROR_NAMED("SAR_plugin", "c_nw = (%f,%f,%f)",
+                    plane_corners.at<double>(0, 0), plane_corners.at<double>(1, 0), plane_corners.at<double>(2, 0));
+            ROS_ERROR_NAMED("SAR_plugin", "c_ne = (%f,%f,%f)",
+                    plane_corners.at<double>(0, 1), plane_corners.at<double>(1, 1), plane_corners.at<double>(2, 1));
+            ROS_ERROR_NAMED("SAR_plugin", "c_sw = (%f,%f,%f)",
+                    plane_corners.at<double>(0, 2), plane_corners.at<double>(1, 2), plane_corners.at<double>(2, 2));
+            ROS_ERROR_NAMED("SAR_plugin", "c_se = (%f,%f,%f)",
+                    plane_corners.at<double>(0, 3), plane_corners.at<double>(1, 3), plane_corners.at<double>(2, 3));
 
-            //Fill the NavSatFix message
-            //gnss_fix_message_.latitude = latitude_deg;
-            //gnss_fix_message_.longitude = longitude_deg;
-            //gnss_fix_message_.altitude = altitude;
-            //gnss_fix_message_.position_covariance[0] = north_stdev_;
-            //gnss_fix_message_.position_covariance[4] = east_stdev_;
-            //gnss_fix_message_.position_covariance[8] = alt_stdev_;
-            //gnss_fix_message_.position_covariance_type = sensor_msgs::NavSatFix::COVARIANCE_TYPE_DIAGONAL_KNOWN;
+            ROS_ERROR_NAMED("SAR_plugin", "antenna_position = (%f,%f,%f)",
+                    antenna_position.at<double>(0), antenna_position.at<double>(1), antenna_position.at<double>(2));
+            //ROS_ERROR_NAMED("SAR_plugin", "noisy_antenna_position = (%f,%f,%f)",
+            //        sar_sensor_phase_center_position.at<double>(0), sar_sensor_phase_center_position.at<double>(1), sar_sensor_phase_center_position.at<double>(2));
+            ROS_ERROR_NAMED("SAR_plugin", "rf_propagation_axis = (%f,%f,%f)",
+                    antennaXVec.at<double>(0), antennaXVec.at<double>(1), antennaXVec.at<double>(2));
+            ROS_ERROR_NAMED("SAR_plugin", "antennaYVec = (%f,%f,%f)",
+                    antennaYVec.at<double>(0), antennaYVec.at<double>(1), antennaYVec.at<double>(2));
+            ROS_ERROR_NAMED("SAR_plugin", "antennaZVec = (%f,%f,%f)",
+                    antennaZVec.at<double>(0), antennaZVec.at<double>(1), antennaZVec.at<double>(2));
+#endif
+            // make vector into 3d world
+            cv::Mat_<double> ip(3, 1);
+            cv::Mat rp0 = antenna_position;
+            cv::Mat tp0 = plane_corners.col(0);
+            cv::Mat tp1 = plane_corners.col(1);
+            cv::Mat tp2 = plane_corners.col(2);
+            cv::Mat tp3 = plane_corners.col(3);
 
-            //Fill the TwistStamped
-            //gnss_vel_message_.twist.linear.x = ground_speed * cos(ground_course_rad);
-            //gnss_vel_message_.twist.linear.y = ground_speed * sin(ground_course_rad);
-            //Apparently SAR units don't report vertical speed?
-            //gnss_vel_message_.twist.linear.z = 0;
+            cv::Mat_<double> uv_texture_coords(2, 4);
+            //cv::Mat_<double> uv_texture_coords_w_noise(2, 4);
+            bool validHomographyEstimate = true;
+            // find 3d intersection pt with plane 
+            // convert 3d intersection pt to pixel coordinate in textured image
+            for (int cornerIndex = 0; cornerIndex < 4; cornerIndex++) {
+                cv::Mat rp1 = sar_sensor_corners_physical.col(cornerIndex);
+                if (intersectRayPolygon(rp0, rp1, tp1, tp0, tp2, ip)) {
+                    uv_texture_coords.at<double>(0, cornerIndex) = orientedUVec.dot(ip - tp0) / plane_dimensions[0];
+                    uv_texture_coords.at<double>(1, cornerIndex) = orientedVVec.dot(ip - tp0) / plane_dimensions[1];
+                    sar_cameraview_.plane_xyz_coords[cornerIndex] = (float) ip.at<double>(0);
+                    sar_cameraview_.plane_xyz_coords[cornerIndex + 4] = (float) ip.at<double>(1);
+                    sar_cameraview_.plane_xyz_coords[cornerIndex + 8] = (float) ip.at<double>(2);
+                    //uv_texture_coords.at<double>(0, cornerIndex) = (ip.at<double>(0) - tp0.at<double>(0)) / plane_dimensions[0];
+                    //uv_texture_coords.at<double>(1, cornerIndex) = (ip.at<double>(1) - tp0.at<double>(1)) / plane_dimensions[1];
+#if DEBUG > 3
+                    ROS_ERROR_NAMED("SAR_plugin", "found intersection triangle[0] = (%f,%f,%f)",
+                            ip.at<double>(0), ip.at<double>(1), ip.at<double>(2));
+                    ROS_ERROR_NAMED("SAR_plugin", "uv[%d] = (%f,%f)",
+                            cornerIndex, uv_texture_coords.at<double>(0, cornerIndex), uv_texture_coords.at<double>(1, cornerIndex));
+#endif
+                } else if (intersectRayPolygon(rp0, rp1, tp1, tp2, tp3, ip)) {
+                    uv_texture_coords.at<double>(0, cornerIndex) = orientedUVec.dot(ip - tp0) / plane_dimensions[0];
+                    uv_texture_coords.at<double>(1, cornerIndex) = orientedVVec.dot(ip - tp0) / plane_dimensions[1];
+                    sar_cameraview_.plane_xyz_coords[cornerIndex] = (float) ip.at<double>(0);
+                    sar_cameraview_.plane_xyz_coords[cornerIndex + 4] = (float) ip.at<double>(1);
+                    sar_cameraview_.plane_xyz_coords[cornerIndex + 8] = (float) ip.at<double>(2);
+                    //uv_texture_coords.at<double>(0, cornerIndex) = (ip.at<double>(0) - tp0.at<double>(0)) / plane_dimensions[0];
+                    //uv_texture_coords.at<double>(1, cornerIndex) = (ip.at<double>(1) - tp0.at<double>(1)) / plane_dimensions[1];
+#if DEBUG > 3
+                    ROS_ERROR_NAMED("SAR_plugin", "found intersection triangle[1] = (%f,%f,%f)",
+                            ip.at<double>(0), ip.at<double>(1), ip.at<double>(2));
+                    ROS_ERROR_NAMED("SAR_plugin", "uv[%d] = (%f,%f)",
+                            cornerIndex, uv_texture_coords.at<double>(0, cornerIndex), uv_texture_coords.at<double>(1, cornerIndex));
+#endif
+                } else {
+                    uv_texture_coords.col(cornerIndex) = std::numeric_limits<double>::infinity();
+                    validHomographyEstimate = false;
+                }
+            }
+            if (!validHomographyEstimate) {
+                return;
+            }
 
-            //Time stamps
-            //gnss_message_.header.stamp.fromSec(GZ_COMPAT_GET_SIM_TIME(world_).Double());
-            //gnss_message_.time = gnss_message_.header.stamp;
-            //gnss_vel_message_.header.stamp = gnss_message_.header.stamp;
-            //gnss_fix_message_.header.stamp = gnss_message_.header.stamp;
-            //gnss_fix_message_.header.stamp.fromSec(GZ_COMPAT_GET_SIM_TIME(world_).Double());
+            // find the 4 corner pixel locations in the source image
+            int iWidth = sar_image_resolution_x_, iHeight = sar_image_resolution_y_;
+            std::vector<cv::Point2f> sar_pixel_coords_ground_plane(4);
+            std::vector<cv::Point2f> sar_pixel_coords_uv(4);
+            for (int cornerIndex = 0; cornerIndex < 4; cornerIndex++) {
+                sar_pixel_coords_uv[cornerIndex] = cv::Point2f((float) uv_texture_coords.at<double>(0, cornerIndex),
+                        (float) uv_texture_coords.at<double>(1, cornerIndex));
+                sar_pixel_coords_ground_plane[cornerIndex] = cv::Point2f((float) uv_texture_coords.at<double>(0, cornerIndex) * sar_reference_image_cv_.cols,
+                        (float) uv_texture_coords.at<double>(1, cornerIndex) * sar_reference_image_cv_.rows);
+                sar_cameraview_.plane_uv_coords[cornerIndex] = uv_texture_coords.at<double>(0, cornerIndex);
+                sar_cameraview_.plane_uv_coords[4 + cornerIndex] = uv_texture_coords.at<double>(1, cornerIndex);
+#if DEBUG > 3
+                ROS_ERROR_NAMED("SAR_plugin", "sar_pixel_coords[%d] = (%f,%f)",
+                        cornerIndex, sar_pixel_coords_ground_plane[cornerIndex].x, sar_pixel_coords_ground_plane[cornerIndex].y);
+#endif
+            }
 
+            std::vector<cv::Point2f> sar_pixel_coords_rect_image(4);
+            sar_pixel_coords_rect_image[0] = cv::Point2f(0, 0);
+            sar_pixel_coords_rect_image[1] = cv::Point2f((float) iWidth - 1, 0);
+            sar_pixel_coords_rect_image[2] = cv::Point2f(0, (float) iHeight - 1);
+            sar_pixel_coords_rect_image[3] = cv::Point2f((float) iWidth - 1, (float) iHeight - 1);
 
-            // Publish
-            //GNSS_pub_.publish(gnss_message_);
-            //GNSS_fix_pub_.publish(gnss_fix_message_);
-            //GNSS_vel_pub_.publish(gnss_vel_message_);
+            // call findHomography to estimate the homography
+            //cv::Mat H = cv::findHomography(sar_pixel_coords_rect_image, sar_pixel_coords_ground_plane);
+            cv::Mat H = cv::getPerspectiveTransform(sar_pixel_coords_ground_plane, sar_pixel_coords_rect_image);
+            //cv::Mat H = cv::getPerspectiveTransform(sar_pixel_coords_rect_image, sar_pixel_coords_uv);
+            if (H.cols != 3 || H.rows != 3) {
+                validHomographyEstimate = false;
+                return;
+            }
 
+            for (int r = 0; r < H.rows; r++) {
+                for (int c = 0; c < H.cols; c++) {
+                    sar_cameraview_.homography[r * H.cols + c] = H.at<double>(r, c);
+                }
+            }
 
-            last_time_ = current_time;
+            for (int r = 0; r < H.rows; r++) {
+                for (int c = 0; c < H.cols; c++) {
+                    sar_cameraview_.homography_w_noise[r * H.cols + c] = H.at<double>(r, c);
+                }
+            }
+
+            sar_cameraview_.header.stamp.fromSec(GZ_COMPAT_GET_SIM_TIME(world_).Double());
+            //std::cout << "H:\n" << H << std::endl;
+
+            // call warpPerspective to map the texture to a rectangular image
+            // publish the warped image
+            cv::Mat simulated_sar_image_warp, simulated_sar_image_final;
+            cv::warpPerspective(sar_reference_image_cv_, simulated_sar_image_warp, H, cv::Size(iHeight, iWidth));
+            //cv::Mat_<double> cc90Rotation = (cv::Mat_<double>(2,3) << 0, -1, 0, 1, 0, 0);       
+            //cv::Point2f imageCenter = 0.5 * sar_pixel_coords_rect_image[3];
+            // rotate image counter-clockwise 90 degrees around the image center (scale 1.0)
+            //cv::Mat cc90Rotation = cv::getRotationMatrix2D(imageCenter, 90.0, 1.0);
+            // flip the X-axis pixels
+            //cc90Rotation.at<double>(0, 0) = -cc90Rotation.at<double>(0, 0);
+            //cc90Rotation.at<double>(0, 1) = -cc90Rotation.at<double>(0, 1);
+            //cc90Rotation.at<double>(0, 2) = cc90Rotation.at<double>(0, 2) + iWidth;
+            // compute the new image
+            //cv::warpAffine(simulated_sar_image_warp, simulated_sar_image_final, cc90Rotation, simulated_sar_image_warp.size());
+            simulated_sar_image_final = simulated_sar_image_warp.clone();
+
+            cv::Mat sar_reference_image_copy = sar_reference_image_cv_.clone();
+            int lineType = cv::LINE_8;
+
+            cv::Point polyPts[4] = {cv::Point(sar_pixel_coords_ground_plane[0]), cv::Point(sar_pixel_coords_ground_plane[1]),
+                cv::Point(sar_pixel_coords_ground_plane[3]), cv::Point(sar_pixel_coords_ground_plane[2])};
+            cv::fillConvexPoly(sar_reference_image_copy, polyPts, 4, cv::Scalar(0, 255, 0), lineType, 0);
+            //cv::namedWindow("SAR Image", cv::WINDOW_NORMAL);
+            //cv::imshow("SAR Image", simulated_sar_image_final);
+            //cv::resizeWindow("SAR Image", 200, 200);
+            //cv::waitKey(1);
+
+            //imshow(sar_reference_image_copy);
+            cv_bridge::CvImage sar_truth_img_msg;
+            sar_truth_img_msg.image = sar_reference_image_copy;
+            sar_truth_img_msg.header.stamp.fromSec(GZ_COMPAT_GET_SIM_TIME(world_).Double());
+            sar_truth_img_msg.encoding = sensor_msgs::image_encodings::BGR8;
+
+            SAR_ground_truth_image_pub_.publish(sar_truth_img_msg.toImageMsg());
+
+            cv_bridge::CvImage sar_img_msg;
+            sar_img_msg.image = simulated_sar_image_final;
+            sar_img_msg.header.stamp.fromSec(GZ_COMPAT_GET_SIM_TIME(world_).Double());
+            sar_img_msg.encoding = sensor_msgs::image_encodings::BGR8;
+
+            SAR_image_pub_.publish(sar_img_msg.toImageMsg());
+            SAR_camera_view_pub_.publish(sar_cameraview_);
         }
 
     }
-
-
-    // this assumes a plane tangent to spherical earth at initial lat/lon
-
-//    void SARPlugin::convertNorthEastToWGS84(double dpn, double dpe, double& dlat, double& dlon) {
-//
-//        static const double Re = 6371000.0; // radius of earth in meters
-//        double R = Re + initial_altitude_; // current radius from earth center
-//
-//        dlat = asin(dpn / R);
-//        dlon = asin(dpe / (R * cos(initial_latitude_ * M_PI / 180.0)));
-//    }
 
     void SARPlugin::gzModelPoseToOpenCV(gazebo::physics::EntityPtr _entity, cv::Mat& orientation, cv::Mat & position) {
         ignition::math::Pose3d gz_pose = _entity->WorldPose();

@@ -85,7 +85,7 @@ class ImageRegistrationWithMutualInformation(ImageRegistration):
         
         return mutualInformation
 
-    def registerImagePair(self, image_moving_bw, image_ref, initialTransform):
+    def registerImagePair(self, image_moving_bw, image_ref, initialTransform, add_noise=False):
         """
         fminsearch matlab equivalent
         https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.fmin.html
@@ -104,8 +104,11 @@ class ImageRegistrationWithMutualInformation(ImageRegistration):
             print("initialTransform = %s" % str(initialTransform))
         transformAsVec = np.reshape(initialTransform, (1, 9))
         transformAsVec = transformAsVec[0, :8]
-        noiseVec = np.random.normal(0, 1, (1, 8))
-        noisy_transformAsVec = transformAsVec + 0.025*np.multiply(transformAsVec,noiseVec)
+
+        if (add_noise == True):
+            noiseVec = np.random.normal(0, 1, (1, 8))
+            noisy_transformAsVec = transformAsVec + 0.025*np.multiply(transformAsVec,noiseVec)
+
         #print("transformAsVec = %s" % str(transformAsVec))
 
         minimizationErrorFunction = lambda x: -self.calculateMutualInformation(image_moving_bw, image_ref_scaled, x)

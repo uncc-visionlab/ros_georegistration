@@ -213,6 +213,7 @@ class ROSImageRegistrationNode(object):
             uv_corners = np.reshape(camera_view_msg.plane_uv_coords, (2, 4))
             #print("uv_corners = %s" % str(uv_corners))
             homography = np.reshape(camera_view_msg.homography, (3, 3))
+            homography_w_noise = np.reshape(camera_view_msg.homography_w_noise, (3, 3))
             #print("homography = %s" % str(homography))
             xyz_corners = np.reshape(camera_view_msg.plane_xyz_coords, (3, 4))
             # swap the bottom right and bottom left corners for solvePnP and other functions
@@ -221,6 +222,9 @@ class ROSImageRegistrationNode(object):
             cameraK = np.reshape(camera_view_msg.K, (3, 3))
             #print("camera_K = %s" % str(cameraK))
             cameraPose = np.reshape(camera_view_msg.pose, (4, 4))
+            cameraPose_w_noise = np.reshape(camera_view_msg.pose_w_noise, (4, 4))
+            print("camera_Pose = %s" % str(cameraPose))
+            print("camera_Pose_w_noise = %s" % str(cameraPose_w_noise))
             # Collect current coordinates
             current_coordinate = tuple(cameraPose[:2,3])
             if (self.DEBUG == True):
