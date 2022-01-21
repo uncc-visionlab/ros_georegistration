@@ -274,31 +274,6 @@ namespace rosradar_plugins {
             if (!hasReferenceImage) {
                 return;
             }
-            cv::Mat_<double> ground_plane_orientation(3, 3);
-            cv::Mat_<double> ground_plane_position(3, 1);
-            gzModelPoseToOpenCV(ground_plane_model_, ground_plane_orientation, ground_plane_position);
-            // in Gazebo X = North, Y = West, Z = Up
-            cv::Mat orientedNormal = ground_plane_orientation * cv::Mat(plane_normal);
-            cv::Vec3d plane_u(1.0, 0.0, 0.0);
-            plane_u = plane_u - plane_u.dot(plane_normal) * plane_normal;
-            plane_u = plane_u / cv::norm(plane_u);
-            cv::Mat orientedUVec = ground_plane_orientation * cv::Mat(plane_u);
-            cv::Vec3d plane_v(0.0, -1.0, 0.0);
-            plane_v = plane_v - plane_v.dot(plane_normal) * plane_normal;
-            plane_v = plane_v / cv::norm(plane_v);
-            cv::Mat orientedVVec = ground_plane_orientation * cv::Mat(plane_v);
-
-            cv::Mat_<double> plane_corners(3, 4);
-            plane_corners.col(0) = ground_plane_position - 0.5 * plane_dimensions[0] * orientedUVec - 0.5 * plane_dimensions[1] * orientedVVec;
-            plane_corners.col(1) = ground_plane_position + 0.5 * plane_dimensions[0] * orientedUVec - 0.5 * plane_dimensions[1] * orientedVVec;
-            plane_corners.col(2) = ground_plane_position - 0.5 * plane_dimensions[0] * orientedUVec + 0.5 * plane_dimensions[1] * orientedVVec;
-            plane_corners.col(3) = ground_plane_position + 0.5 * plane_dimensions[0] * orientedUVec + 0.5 * plane_dimensions[1] * orientedVVec;
-
-            cv::Mat_<double> plane_coefficients(4, 1);
-            plane_coefficients.at<double>(0, 0) = plane_normal[0];
-            plane_coefficients.at<double>(1, 0) = plane_normal[1];
-            plane_coefficients.at<double>(2, 0) = plane_normal[2];
-            plane_coefficients.at<double>(3, 0) = -plane_normal.dot(ground_plane_position);
 
             cv::Mat_<double> antenna_orientation(3, 3);
             cv::Mat_<double> antenna_position(3, 1);
@@ -316,7 +291,6 @@ namespace rosradar_plugins {
             camera_orientation.row(1) = antennaYVec.t();
             camera_orientation.row(2) = antennaXVec.t();
 
-            sar_cameraview_.pose[15] = 1.0;
 
             // compute ground truth pose
             for (int c = 0; c < camera_orientation.cols; c++) {
@@ -327,6 +301,7 @@ namespace rosradar_plugins {
             for (int r = 0; r < antenna_position.rows; r++) {
                 sar_cameraview_.pose[r * 4 + 3] = antenna_position.at<double>(r, 0);
             }
+            sar_cameraview_.pose[15] = 1.0;
 
             // compute pose with user-configured XYZ position and orientation noise 
             cv::Mat_<double> noiseRPY_orientation = camera_orientation.clone();
@@ -353,7 +328,6 @@ namespace rosradar_plugins {
                     sar_cameraview_.pose_w_noise[r * 4 + c] = noiseRPY_orientation.at<double>(r, c);
                 }
             }
-            sar_cameraview_.pose_w_noise[15] = 1.0;
 
             // Add noise per Gauss-Markov Process (p. 139 UAV Book)
             cv::Mat_<double> noiseXYZ_position(3, 1);
@@ -366,6 +340,36 @@ namespace rosradar_plugins {
             for (int r = 0; r < antenna_position.rows; r++) {
                 sar_cameraview_.pose_w_noise[r * 4 + 3] = antenna_position.at<double>(r, 0) + noiseXYZ_position.at<double>(r, 0);
             }
+            sar_cameraview_.pose_w_noise[15] = 1.0;
+
+            // get the pose of the ground plane model
+            cv::Mat_<double> ground_plane_orientation(3, 3);
+            cv::Mat_<double> ground_plane_position(3, 1);
+            gzModelPoseToOpenCV(ground_plane_model_, ground_plane_orientation, ground_plane_position);
+            // in Gazebo X = North, Y = West, Z = Up
+            cv::Mat orientedNormal = ground_plane_orientation * cv::Mat(plane_normal);
+            cv::Vec3d plane_u(1.0, 0.0, 0.0);
+            plane_u = plane_u - plane_u.dot(plane_normal) * plane_normal;
+            plane_u = plane_u / cv::norm(plane_u);
+            cv::Mat orientedUVec = ground_plane_orientation * cv::Mat(plane_u);
+            cv::Vec3d plane_v(0.0, -1.0, 0.0);
+            plane_v = plane_v - plane_v.dot(plane_normal) * plane_normal;
+            plane_v = plane_v / cv::norm(plane_v);
+            cv::Mat orientedVVec = ground_plane_orientation * cv::Mat(plane_v);
+
+            // calculate 3D positions of the corners of the plane model
+            cv::Mat_<double> plane_corners(3, 4);
+            plane_corners.col(0) = ground_plane_position - 0.5 * plane_dimensions[0] * orientedUVec - 0.5 * plane_dimensions[1] * orientedVVec;
+            plane_corners.col(1) = ground_plane_position + 0.5 * plane_dimensions[0] * orientedUVec - 0.5 * plane_dimensions[1] * orientedVVec;
+            plane_corners.col(2) = ground_plane_position - 0.5 * plane_dimensions[0] * orientedUVec + 0.5 * plane_dimensions[1] * orientedVVec;
+            plane_corners.col(3) = ground_plane_position + 0.5 * plane_dimensions[0] * orientedUVec + 0.5 * plane_dimensions[1] * orientedVVec;
+
+            // calculate coefficients of the algebraic plane containing the plane model
+            cv::Mat_<double> plane_coefficients(4, 1);
+            plane_coefficients.at<double>(0, 0) = plane_normal[0];
+            plane_coefficients.at<double>(1, 0) = plane_normal[1];
+            plane_coefficients.at<double>(2, 0) = plane_normal[2];
+            plane_coefficients.at<double>(3, 0) = -plane_normal.dot(ground_plane_position);
 
             cv::Mat pixel_size = (cv::Mat_<double>(2, 1) << sar_camera_focal_length_ / sar_camera_fx_, sar_camera_focal_length_ / sar_camera_fy_);
             cv::Mat xy_resolution = (cv::Mat_<double>(2, 1) << sar_image_resolution_x_, sar_image_resolution_y_);
