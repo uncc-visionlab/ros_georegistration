@@ -134,7 +134,7 @@ class ROSImageRegistrationNode(object):
         for cIdx in range(2, -1, -1):
             dotprod = np.dot(T_ref[:3,cIdx],T_est[:3,cIdx])
             if (abs(dotprod) > 1):
-                roll_yaw_pitch_deg_xyz[cIdx] = 0;
+                roll_yaw_pitch_deg_xyz[cIdx] = 0
             else:
                 roll_yaw_pitch_deg_xyz[cIdx] = math.acos(dotprod)*180.0/np.pi
             out_of_plane_axis = np.cross(T_ref[:3,cIdx],T_est[:3,cIdx])
@@ -207,7 +207,7 @@ class ROSImageRegistrationNode(object):
         try:
             if (self.image_ref is None):
                 return
-			#Timing for algorithms
+            #Timing for algorithms
             start = timeit.default_timer()
             #print("Got SAR camera view message")
             uv_corners = np.reshape(camera_view_msg.plane_uv_coords, (2, 4))
@@ -310,7 +310,7 @@ class ROSImageRegistrationNode(object):
             poseTransform_tru[:3,:3] = poseRMatrix_tru
             poseTransform_tru[:3, 3] = translation_vector_tru[:, 0]
             invPoseTransform_tru = np.linalg.inv(poseTransform_tru)
-            invPoseTransform_tru[:3,:3] = np.transpose(invPoseTransform_tru[:3,:3]);
+            invPoseTransform_tru[:3,:3] = np.transpose(invPoseTransform_tru[:3,:3])
             invPoseTransform_tru[0,:3] = -invPoseTransform_tru[0,:3]
             invPoseTransform_tru[1,:3] = -invPoseTransform_tru[1,:3]
             #print("poseEstimate_tru = %s" % poseTransform_tru)
@@ -377,7 +377,8 @@ class ROSImageRegistrationNode(object):
                     #pts_transformed_homogeneous_estimated[:2, idx] *= [m_per_pixel_y, m_per_pixel_x]
                     pts_transformed_homogeneous_estimated[idx,:] = np.multiply(pts_transformed_homogeneous_estimated[idx,:], m_per_pixel_XY)
                     # gazebo's Y axis is flipped
-                    pts_transformed_homogeneous_estimated[idx,1] *= -1;
+                    pts_transformed_homogeneous_estimated[idx,1] *= -1
+
                 # concatenate the Z coordinate for all points and set it to 0
                 pts_transformed_homogeneous_estimated = np.concatenate((pts_transformed_homogeneous_estimated.T, 
                                                                         np.zeros((1,pts_transformed_homogeneous_estimated.shape[0]), dtype=np.float32)), axis=0)
@@ -403,7 +404,7 @@ class ROSImageRegistrationNode(object):
                 yaw_pitch_roll_xyz_err_est = ROSImageRegistrationNode.computePoseError(cameraPose, invPoseTransform_est)
                 if (self.LOGGING == True):
                     datetime_str = str(time.datetime.now().strftime('%Y_%m_%d_%H_%M_%S'))                    
-                    algorithm_str = self.algorithm.toString();
+                    algorithm_str = self.algorithm.toString()
                     self.dumpAsStringToLog(datetime_str)
                     self.dumpAsStringToLog(algorithm_str)
                     self.dumpNumpyDataToLog(cameraPose)
@@ -453,7 +454,7 @@ class ROSImageRegistrationNode(object):
                 self.register_fixed_image_pub.publish(register_fixed_image_message)
                 if(self.rgb_truth_homography_pub.get_num_connections() > 0):
                     # compute a visualization of the camera view in the RGB image as a green polygon
-                    ref_img = self.image_ref.copy();
+                    ref_img = self.image_ref.copy()
                     cv2.fillPoly(ref_img, pts=np.int32([polyPts.transpose()]), color=(0, 255, 0))
                     ref_image_truth_message = self.bridge.cv2_to_imgmsg(ref_img, encoding="passthrough")
                     self.rgb_truth_homography_pub.publish(ref_image_truth_message)

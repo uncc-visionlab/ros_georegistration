@@ -2,7 +2,6 @@
 
 import cv2
 import numpy as np
-   
 
 class ImageRegistration(object):
     """An object that runs image registration algorithms on image data."""
@@ -46,3 +45,25 @@ class ImageRegistration(object):
         else:
             resized = image.copy()
         return (resized, scalef)
+
+    @staticmethod
+    def fuseImage(moving_image, fixed_image, H_mov2fix):
+        if (moving_image is None or fixed_image is None):
+            return
+        if (False):
+            img = fixed_image.copy()
+            blue = img[:, :, 0].copy()
+            #cv2.fillPoly(blue, [np.int_(pts_transformed_homogenous[:, :2])], color=228, lineType=8, shift=0)
+            img[:, :, 0] = blue
+        else:
+            fixed_bw = ImageRegistration.convertImageColorSpace(fixed_image)
+            moving_bw = ImageRegistration.convertImageColorSpace(moving_image)
+            moving_bw_xformed = cv2.warpPerspective(moving_bw, H_mov2fix, (fixed_bw.shape[1], fixed_bw.shape[0]))
+            blue = np.zeros(fixed_bw.shape[:2], dtype=np.uint8)
+            green = fixed_bw
+            red = moving_bw_xformed
+            # print("size (r,g,b)=(%s,%s,%s)" % (red.shape[:2], green.shape[:2], blue.shape[:2]))
+            #cv2.fillPoly(blue, [np.int_(pts_transformed_homogenous[:, :2])], color=128, lineType=8, shift=0)
+            img = np.dstack((blue, green, red)).astype(np.uint8)
+        return img
+
