@@ -21,6 +21,9 @@ class NumericalDiff(object):
         self.f = fhandle
         self.inputs = dim_input
         self.values = dim_value
+        self.set_method(method)
+
+    def set_method(self, method='central'):
         if method == 'central':
             self.method = NumericalDiff.Method.CENTRAL_DIFFERENCE
         elif method == 'five-point':
@@ -57,6 +60,7 @@ class NumericalDiff(object):
         H : The (DxDxK) Hessian matrix holding the second order partial differentials of each
         component of the K-dimensional output vector with respect to the variables of the D-dimensional input vector.
         """
+        xin = np.atleast_1d(xin)
         x = xin
         x_p = x
         x_m = x
@@ -84,13 +88,13 @@ class NumericalDiff(object):
         # compute off diagonal elements
         for k in range(0, self.values):
             for x_i in range(0, self.inputs):
-                h_x_i = self.epsilon * abs(math.sqrt(x[x_i]))
+                h_x_i = self.epsilon * math.sqrt(abs(x[x_i]))
                 if h_x_i < self.epsilon:
                     h_x_i = self.epsilon
                 x_p[x_i] = x[x_i] + h_x_i
                 x_m[x_i] = x[x_i] - h_x_i
                 for x_j in range(x_i+1, self.inputs):
-                    h_x_j = self.epsilon * abs(math.sqrt(x[x_j]))
+                    h_x_j = self.epsilon * math.sqrt(abs(x[x_j]))
                     if h_x_j < self.epsilon:
                         h_x_j = self.epsilon
                     x_pp[x_j] = x_p[x_j] + h_x_j
@@ -108,7 +112,7 @@ class NumericalDiff(object):
 
         return H
 
-    def df(self, xin):
+    def jacobian(self, xin):
         """Compute the Jacobian (partial derivatives) of the vector-valued function, f, having a D-dimensional input
          and a K-dimensional output.
 
@@ -131,10 +135,11 @@ class NumericalDiff(object):
         #val6 = np.zeros((self.inputs, 1), dtype=np.float64)
         #val7 = np.zeros((self.inputs, 1), dtype=np.float64)
         #val8 = np.zeros((self.inputs, 1), dtype=np.float64)
-        J = np.zeros((self.values, self.inputs), dtype=np.float64)
+        xin = np.atleast_1d(xin)
         x = xin
+        J = np.zeros((self.values, self.inputs), dtype=np.float64)
         # initialization
-        #if self.method == NumericalDiff.Method.FORWARD_DIFFERENCE:
+        # if self.method == NumericalDiff.Method.FORWARD_DIFFERENCE:
         # elif self.method == NumericalDiff.Method.CENTRAL_DIFFERENCE:
         # do nothing
         # elif self.method == NumericalDiff.Method.FIVE_POINT_DIFFERENCE:
@@ -143,12 +148,12 @@ class NumericalDiff(object):
         # do nothing
         # elif self.method == NumericalDiff.Method.NINE_POINT_DIFFERENCE:
         # do nothing
-        #else:
-        #    print('NumericalDiff: Error no such method!\n')
+        # else:
+        # print('NumericalDiff: Error no such method!\n')
 
         # Function Body
         for dim in range(0, self.inputs):
-            h = self.epsilon * abs(math.sqrt(x[dim]))
+            h = self.epsilon * math.sqrt(abs(x[dim]))
             if h < self.epsilon:
                 h = self.epsilon
             if self.method == NumericalDiff.Method.FORWARD_DIFFERENCE:
@@ -268,7 +273,7 @@ class NumericalDiff(object):
         else:
             raise ValueError("Method must be 'central', 'forward' or 'backward'.")
 
-
 if __name__ == '__main__':
-    df = NumericalDiff()
+    df = NumericalDiff(np.exp, 1, 1,'central');
+    print(df.jacobian(0))
     print(df.derivative(np.exp, 0, 'central', 0.0001))
