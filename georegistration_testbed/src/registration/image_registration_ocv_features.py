@@ -266,7 +266,7 @@ class ImageRegistrationWithOpenCVFeatures(ImageRegistration):
                 m = sel_matches[mIdx]
                 # draw the keypoints
                 # print m.queryIdx, m.trainIdx, m.distance
-                color = tuple([np.random.randint(128, 255) for _ in xrange(3)])
+                color = tuple([np.random.randint(128, 255) for _ in range(3)])
                 k1 = keypoints_moving
                 k2 = keypoints_ref
                 keypoint1_int = (int(k1[m.trainIdx].pt[0] * scale_moving), int(k1[m.trainIdx].pt[1] * scale_moving));
@@ -280,7 +280,7 @@ class ImageRegistrationWithOpenCVFeatures(ImageRegistration):
             cv2.namedWindow('view matched features', cv2.WINDOW_NORMAL)
             cv2.imshow('view matched features', view)
             cv2.resizeWindow('view matched features', 600, 600)
-            cv2.waitKey(5)        
+            cv2.waitKey()
             
         if (self.OPENCV_SHOW_HOMOGRAPHY_BOUNDS_ON_REFERENCE == True and image_ref is not None):
             if (not hasattr(self, 'scaled_image_ref')):
@@ -316,6 +316,11 @@ class ImageRegistrationWithOpenCVFeatures(ImageRegistration):
             #cv2.resizeWindow('view homography bounds', 1600,1600)
             #cv2.waitKey() 
 
+        fused_image = image_registration.fuseImage(image_moving, image_ref, homography)
+        #cv2.imshow('fused image', fused_image)
+        #cv2.waitKey()
+        print('Saving image '+'registration_result_image.png')
+        cv2.imwrite('registration_result_image_.png', fused_image)
         return (homography, mask)
 
 # example run via console
@@ -325,7 +330,7 @@ class ImageRegistrationWithOpenCVFeatures(ImageRegistration):
 if __name__ == '__main__':
     import sys
     if len(sys.argv) < 3:
-        print 'usage: %s image_moving image_reference' % sys.argv[0]
+        print('usage: %s image_moving image_reference' % sys.argv[0])
         sys.exit(1)
 
     image_moving_path = sys.argv[1]
@@ -339,5 +344,6 @@ if __name__ == '__main__':
     image_registration = ImageRegistrationWithOpenCVFeatures()
     image_registration.SAVE_WARPEDIMAGE = True
     image_registration.OPENCV_SHOW_HOMOGRAPHY_BOUNDS_ON_REFERENCE = True
+    image_registration.OPENCV_VISUALIZE_MATCHES = False
     #image_registration.OPENCV_SHOW_HOMOGRAPHY_MAXDIM = 512
     image_registration.registerImagePair(image_moving, image_ref=image_reference)
