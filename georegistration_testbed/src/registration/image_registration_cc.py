@@ -17,7 +17,7 @@ class ImageRegistrationWithCrossCorrelation(ImageRegistration):
         self.GAUSSIAN_FILTER_SIZE = 15
         self.MOVING_IMAGE_SIZE = 100
         self.cross_correlation_multiscale = False
-        self.Method = cv2.TM_SQDIFF # Squared Difference
+        #self.Method = cv2.TM_SQDIFF # Squared Difference
         #self.Method = cv2.TM_SQDIFF_NORMED # Normalized Squared Difference 
         #self.Method = cv2.TM_CCORR # Cross Correlation
         #self.Method = cv2.TM_CCORR_NORMED # Normalized Cross Correlation
@@ -100,11 +100,12 @@ class ImageRegistrationWithCrossCorrelation(ImageRegistration):
         imgOut = cv2.pyrDown(img_blurred)        
         return imgOut
 
-    def registerImagePair(self, image_moving, image_ref, initialTransform):
+    def registerImagePair(self, image_moving, image_ref, initialTransform, method):
         """
         fminsearch matlab equivalent
         https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.fmin.html
         """
+        self.Method = method
         self.DEBUG = True
         #image_ref_blurred = cv2.GaussianBlur(image_ref, (15, 15), 0)
         #scalef = float(150)/max(image_ref_blurred.shape[:2])
@@ -122,8 +123,9 @@ class ImageRegistrationWithCrossCorrelation(ImageRegistration):
 
         if (self.DEBUG == True):
             print("initialTransform = %s" % str(initialTransform))
-        transformAsVec = np.reshape(initialTransform, (1, 9))
-        transformAsVec = transformAsVec[0, :8]
+        #transformAsVec = np.reshape(initialTransform, (1, 9))
+        #transformAsVec = transformAsVec[0, :8]
+        print("noisy_transformAsVec = %s" % str(initialTransform))
 
         if (self.cross_correlation_multiscale == True):
             image_ref_pyramid = image_ref_bw.copy()
@@ -137,18 +139,20 @@ class ImageRegistrationWithCrossCorrelation(ImageRegistration):
             image_ref_scaled = image_ref_pyramid
             #transformAsVec = transformAsVec * scalef
         else:
-            scalef = float(self.MOVING_IMAGE_SIZE)/max(image_ref.shape[:2])
-            image_ref_scaled = cv2.resize(image_ref_bw, (0, 0), fx=scalef, fy=scalef)
+            #scalef = float(self.MOVING_IMAGE_SIZE)/max(image_ref.shape[:2])
+            #image_ref_scaled = cv2.resize(image_ref_bw, (0, 0), fx=scalef, fy=scalef)
+            image_ref_scaled = image_ref_bw
+
         #image_ref_scaled = cv2.GaussianBlur(image_ref_scaled, (15, 15), 0)
         #print("size %s" % str(image_ref_scaled.shape))
         
-        noiseVec = np.random.normal(0, 1, (1, 8))
-        noisy_transformAsVec = transformAsVec + 0.05*np.multiply(transformAsVec,noiseVec)
+        #noiseVec = np.random.normal(0, 1, (1, 8))
+        #noisy_transformAsVec = transformAsVec + 0.05*np.multiply(transformAsVec,noiseVec)
         #print("transformAsVec = %s" % str(transformAsVec))
 
         minimizationErrorFunction = lambda x: self.calculateCrossCorrelation(image_moving_bw, image_ref_scaled, x)
         
-        xopt = scipy.optimize.fmin(func=minimizationErrorFunction, x0 = noisy_transformAsVec, args = (), xtol = 0.001, ftol = None, 
+        xopt = scipy.optimize.fmin(func=minimizationErrorFunction, x0 = initialTransform, args = (), xtol = 0.001, ftol = None, 
                                    maxiter = self.maximum_iteration_number, maxfun = 50, full_output = False, disp = False, retall = False,
                                    callback = None, initial_simplex = None)
         #if (self.cross_correlation_multiscale == True):
