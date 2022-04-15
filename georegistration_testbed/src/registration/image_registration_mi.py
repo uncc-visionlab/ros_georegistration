@@ -129,7 +129,7 @@ class ImageRegistrationWithMutualInformation(ImageRegistration):
 
         if (add_noise == True):
             noiseVec = np.random.normal(0, 1, (1, 8))
-            noisy_transformAsVec = transformAsVec + 0.05 * np.multiply(transformAsVec, noiseVec)
+            noisy_transformAsVec = transformAsVec + 0.15 * np.multiply(transformAsVec, noiseVec)
         else:
             noisy_transformAsVec = transformAsVec
         # print("transformAsVec = %s" % str(transformAsVec))
@@ -138,22 +138,27 @@ class ImageRegistrationWithMutualInformation(ImageRegistration):
         minimizationErrorFunction_df = NumericalDiff(minimizationErrorFunction, 8, 1, 'central')
         jacobianErrorFunction = lambda x: minimizationErrorFunction_df.jacobian(x)
         hessianErrorFunction = lambda x: minimizationErrorFunction_df.hessian(x)
-        minimize_method = 'Nelder-Mead'
+        #minimize_method = 'Nelder-Mead'
         minimize_method = 'Newton-CG'
         #minimize_method = 'CG'
         #minimize_method = 'SLSQP'
+
         #hessianMethod = '3-point'
         hessianMethod = hessianErrorFunction
+
         #jacobianMethod = 'None'
         #jacobianMethod = '3-point'
         jacobianMethod = jacobianErrorFunction
-        transform_bounds = [[-10, 10], [-10, 10], [-1000, 1000], [-10, 10], [-10, 10], [-1000, 1000], [-10, 10], [-10, 10], [-10, 10]];
-        # noisy_transformAsVec = scipy.optimize.fmin(func=minimizationErrorFunction, x0=noisy_transformAsVec, args=(), xtol=0.001,
-        #                                   ftol=None,
-        #                                   maxiter=self.maximum_iteration_number, maxfun=100, full_output=False,
-        #                                   disp=False,
-        #                                   retall=False,
-        #                                   callback=None, initial_simplex=None)
+
+        maximum_iterations = 1000
+
+        transform_bounds = [[-10, 10], [-10, 10], [-1000, 1000], [-10, 10], [-10, 10], [-1000, 1000], [-1, 1], [-1, 1]];
+        noisy_transformAsVec = scipy.optimize.fmin(func=minimizationErrorFunction, x0=noisy_transformAsVec, args=(), xtol=0.001,
+                                          ftol=None,
+                                          maxiter=self.maximum_iteration_number, maxfun=100, full_output=False,
+                                          disp=False,
+                                          retall=False,
+                                          callback=None, initial_simplex=None)
         if False:
             x_optimized = scipy.optimize.fmin(func=minimizationErrorFunction, x0=noisy_transformAsVec, args=(),
                                               xtol=0.1,
@@ -169,9 +174,12 @@ class ImageRegistrationWithMutualInformation(ImageRegistration):
                                                        jac=jacobianMethod,
                                                        hess=hessianMethod, hessp=None, bounds=transform_bounds,
                                                        constraints=(), tol=0.001,
-                                                       callback=None, options={'func': None, 'maxiter': 500})
+                                                       callback=None, options={'maxiter': maximum_iterations})
             x_optimized = optimized_result.x
+
+        hessian = hessianMethod(x_optimized)
         print('x_optimized = ' + str(x_optimized))
+        print('Hessian = ' + str(hessian))
         estTransformAsVec = np.append(x_optimized, [1.0], axis=0)
         Hest = np.reshape(estTransformAsVec, (3, 3))
         fused_image = ImageRegistration.fuseImage(image_moving_bw, image_ref, Hest)
