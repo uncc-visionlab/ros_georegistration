@@ -21,11 +21,15 @@ class ImageRegistration(object):
     
     @staticmethod
     def convertImageColorSpace(image):
-        (height, width, channels) = image.shape[:3];
-        if (channels >= 3):
+        if image.ndim < 3:
+            channels = 1
+            (height, width) = image.shape[:2];
+        else:
+            (height, width, channels) = image.shape[:3];
+        if channels >= 3:
             image_bw = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         else:
-            image_bw = image[:, :, 1]
+            image_bw = image[:, :]
         return image_bw
     
     @staticmethod
@@ -50,7 +54,7 @@ class ImageRegistration(object):
     def fuseImage(moving_image, fixed_image, H_mov2fix):
         if (moving_image is None or fixed_image is None):
             return
-        if (False):
+        if False:
             img = fixed_image.copy()
             blue = img[:, :, 0].copy()
             #cv2.fillPoly(blue, [np.int_(pts_transformed_homogenous[:, :2])], color=228, lineType=8, shift=0)

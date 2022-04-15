@@ -15,12 +15,12 @@ class NumericalDiff(object):
         NINE_POINT_DIFFERENCE = 3
         FORWARD_DIFFERENCE = 4
 
-    def __init__(self, fhandle, dim_input=1, dim_value=1, method='central'):
+    def __init__(self, fhandle, dim_input=1, dim_output=1, method='central'):
         # Define your image topic
         self.initialized = False
         self.f = fhandle
         self.inputs = dim_input
-        self.values = dim_value
+        self.outputs = dim_output
         self.set_method(method)
 
     def set_method(self, method='central'):
@@ -70,10 +70,10 @@ class NumericalDiff(object):
         x_mp = x
         x_mm = x
 
-        H = np.zeros((self.inputs, self.inputs, self.values), dtype=np.float64)
+        H = np.zeros((self.inputs, self.inputs, self.outputs), dtype=np.float64)
 
         # compute diagonal elements
-        for k in range(0, self.values):
+        for k in range(0, self.outputs):
             for x_i in range(0, self.inputs):
                 h_x_i = self.epsilon * math.sqrt(abs(x[x_i]))
                 if h_x_i < self.epsilon:
@@ -81,57 +81,57 @@ class NumericalDiff(object):
                 val2 = np.atleast_1d(self.f(x))
                 x[x_i] = x[x_i] + h_x_i
                 val1 = np.atleast_1d(self.f(x))
-                x[x_i] = x[x_i] - 2*h_x_i
+                x[x_i] = x[x_i] - 2 * h_x_i
                 val3 = np.atleast_1d(self.f(x))
                 x[x_i] = xin[x_i]
-                #print("H_diagonal numerator = %s %s %s " % (str(val1[k]), str(val2[k]), str(val3[k])))
-                Hiik = (val1[k] - 2*val2[k] + val3[k]) / (h_x_i * h_x_i)
-                #print("H_diagonal = %s " % str(Hiik))
+                # print("H_diagonal numerator = %s %s %s " % (str(val1[k]), str(val2[k]), str(val3[k])))
+                Hiik = (val1[k] - 2 * val2[k] + val3[k]) / (h_x_i * h_x_i)
+                # print("H_diagonal = %s " % str(Hiik))
                 H[x_i, x_i, k] = Hiik
         x = xin.copy()
         # compute off diagonal elements
-        for k in range(0, self.values):
+        for k in range(0, self.outputs):
             for x_i in range(0, self.inputs):
                 h_x_i = self.epsilon * math.sqrt(abs(x[x_i]))
                 if h_x_i < self.epsilon:
                     h_x_i = self.epsilon
-                #print("before x_p = %s " % str(x_p))
+                # print("before x_p = %s " % str(x_p))
                 x_p = x.copy()
                 x_m = x.copy()
-                #x_p[x_i] = x[x_i] + h_x_i
+                # x_p[x_i] = x[x_i] + h_x_i
                 x_p[x_i] = x_p[x_i] + h_x_i
-                #print("after x_p = %s " % str(x_p))
-                #x_m[x_i] = x[x_i] - h_x_i
+                # print("after x_p = %s " % str(x_p))
+                # x_m[x_i] = x[x_i] - h_x_i
                 x_m[x_i] = x_m[x_i] - h_x_i
-                for x_j in range(x_i+1, self.inputs):
+                for x_j in range(x_i + 1, self.inputs):
                     h_x_j = self.epsilon * math.sqrt(abs(x[x_j]))
                     if h_x_j < self.epsilon:
                         h_x_j = self.epsilon
                     x_pp = x_p.copy()
-                    #print("before x_pp = %s " % str(x_pp))
+                    # print("before x_pp = %s " % str(x_pp))
                     x_pp[x_j] = x_pp[x_j] + h_x_j
-                    #print("after x_pp = %s " % str(x_pp))
+                    # print("after x_pp = %s " % str(x_pp))
                     x_pm = x_p.copy()
                     x_pm[x_j] = x_pm[x_j] - h_x_j
                     x_mp = x_m.copy()
                     x_mp[x_j] = x_mp[x_j] + h_x_j
                     x_mm = x_m.copy()
                     x_mm[x_j] = x_mm[x_j] - h_x_j
-                    #print("H_off_diagonal numerator x = %s %s %s %s " % (str(x_pp), str(x_pm), str(x_mp), str(x_mm)))
+                    # print("H_off_diagonal numerator x = %s %s %s %s " % (str(x_pp), str(x_pm), str(x_mp), str(x_mm)))
                     val1 = np.atleast_1d(self.f(x_pp))
                     val2 = np.atleast_1d(self.f(x_pm))
                     val3 = np.atleast_1d(self.f(x_mp))
                     val4 = np.atleast_1d(self.f(x_mm))
-                    #print("H_off_diagonal numerator = %s %s %s %s " % (str(val1[k]), str(val2[k]), str(val3[k]), str(val4[k])))
-                    Hijk = (val1[k] - val2[k] - val3[k] + val4[k])/(4*h_x_i*h_x_j)
-                    #print("H_off_diagonal = %s " % str(Hijk))
+                    # print("H_off_diagonal numerator = %s %s %s %s " % (str(val1[k]), str(val2[k]), str(val3[k]), str(val4[k])))
+                    Hijk = (val1[k] - val2[k] - val3[k] + val4[k]) / (4 * h_x_i * h_x_j)
+                    # print("H_off_diagonal = %s " % str(Hijk))
                     H[x_i, x_j, k] = Hijk
                     H[x_j, x_i, k] = H[x_i, x_j, k]
 
-                #x_p[x_i] = xin[x_i]
-                #x_m[x_i] = xin[x_i]
-
-
+                # x_p[x_i] = xin[x_i]
+                # x_m[x_i] = xin[x_i]
+        if self.outputs == 1:
+            H = H[:, :, 0]
         return H
 
     def jacobian(self, xin):
@@ -148,18 +148,18 @@ class NumericalDiff(object):
         """
         # nfev=0;
         # epsilon = Constants.epsilon; % sqrt(eps('double'))
-        #epsilon = self.epsilon
-        #val1 = np.zeros((self.inputs, 1), dtype=np.float64)
-        #val2 = np.zeros((self.inputs, 1), dtype=np.float64)
-        #val3 = np.zeros((self.inputs, 1), dtype=np.float64)
-        #val4 = np.zeros((self.inputs, 1), dtype=np.float64)
-        #val5 = np.zeros((self.inputs, 1), dtype=np.float64)
-        #val6 = np.zeros((self.inputs, 1), dtype=np.float64)
-        #val7 = np.zeros((self.inputs, 1), dtype=np.float64)
-        #val8 = np.zeros((self.inputs, 1), dtype=np.float64)
+        # epsilon = self.epsilon
+        # val1 = np.zeros((self.inputs, 1), dtype=np.float64)
+        # val2 = np.zeros((self.inputs, 1), dtype=np.float64)
+        # val3 = np.zeros((self.inputs, 1), dtype=np.float64)
+        # val4 = np.zeros((self.inputs, 1), dtype=np.float64)
+        # val5 = np.zeros((self.inputs, 1), dtype=np.float64)
+        # val6 = np.zeros((self.inputs, 1), dtype=np.float64)
+        # val7 = np.zeros((self.inputs, 1), dtype=np.float64)
+        # val8 = np.zeros((self.inputs, 1), dtype=np.float64)
         xin = np.atleast_1d(xin)
         x = xin
-        J = np.zeros((self.values, self.inputs), dtype=np.float64)
+        J = np.zeros((self.outputs, self.inputs), dtype=np.float64)
         # initialization
         # if self.method == NumericalDiff.Method.FORWARD_DIFFERENCE:
         # elif self.method == NumericalDiff.Method.CENTRAL_DIFFERENCE:
@@ -259,9 +259,11 @@ class NumericalDiff(object):
                 # nfev = nfev + 1
                 x[dim] = xin[dim]
                 J[:, dim] = (val1 - val8) / (280 * h) - 4 * (val2 - val7) / (105 * h) + (
-                            (val3 - val6) - 4 * (val4 - val5)) / (5 * h)
+                        (val3 - val6) - 4 * (val4 - val5)) / (5 * h)
             else:
                 print('NumericalDiff: Error no such method!\n')
+        if self.outputs == 1:
+            J = J[0, :]
         return J
 
     def derivative(self, f, a, method='central', h=0.01):
@@ -295,7 +297,8 @@ class NumericalDiff(object):
         else:
             raise ValueError("Method must be 'central', 'forward' or 'backward'.")
 
+
 if __name__ == '__main__':
-    df = NumericalDiff(np.exp, 1, 1,'central')
+    df = NumericalDiff(np.exp, 1, 1, 'central')
     print(df.jacobian(0))
     print(df.derivative(np.exp, 0, 'central', 0.0001))
