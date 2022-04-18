@@ -46,8 +46,8 @@ class NumericalDiff(object):
         # eps is the roundoff error ~1.0e-16*f(p) for double precision ~1e-8*f(p) for single precision
         # M_3 is the Lipschitz bound of the 3rd derivative of the function f in the vicinity of the point where
         # the derivative is being evaluated
-        #self.epsilon = 1.5e-8
-        self.epsilon = 1.5e-4
+        self.epsilon = 1.5e-8
+        #self.epsilon = 1.5e-4
 
     def hessian(self, xin):
         """Compute the Hessian (partial derivatives) of the vector-valued function, f, having a D-dimensional input
@@ -264,6 +264,7 @@ class NumericalDiff(object):
                 print('NumericalDiff: Error no such method!\n')
         if self.outputs == 1:
             J = J[0, :]
+            print("norm(J)^2 = " + str(np.dot(J, J)))
         return J
 
     def derivative(self, f, a, method='central', h=0.01):

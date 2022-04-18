@@ -1,11 +1,13 @@
 #!/usr/bin/env python
 
 import cv2
+from PIL.Image import init
+
 from image_registration import *
 from numericalldiff import *
 import numpy as np
 import scipy.optimize
-
+from BFGS import *
 
 class ImageRegistrationWithMutualInformation(ImageRegistration):
     """An object that runs image registration algorithms on image data."""
@@ -88,7 +90,14 @@ class ImageRegistrationWithMutualInformation(ImageRegistration):
         4. Optimization
         """
         # print(str(len(image_moving_bw.ravel())))
-        transformComplete = np.append(transformAsVec, [1.0], axis=0)
+
+        if np.size(transformAsVec) == 8:
+            transformComplete = np.append(transformAsVec, [1.0], axis=0)
+        elif np.size(transformAsVec) == 7:
+            transformComplete = np.append(transformAsVec, [0, 1.0], axis=0)
+        elif np.size(transformAsVec) == 6:
+            transformComplete = np.append(transformAsVec, [0, 0, 1.0], axis=0)
+
         H_mov2fix = np.reshape(transformComplete, (3, 3))
         warpedImage = ImageRegistrationWithMutualInformation.applyTransformation(image_moving, image_ref.shape,
                                                                                  H_mov2fix)
@@ -97,7 +106,7 @@ class ImageRegistrationWithMutualInformation(ImageRegistration):
         histogram2D_output = ImageRegistrationWithMutualInformation.histogramOutput(warpedImage, image_ref,
                                                                                     n_bins=self.numIntensityBins)
         mutualInformation = ImageRegistrationWithMutualInformation.mutualInformation(histogram2D_output)
-        print('MI = ' + str(mutualInformation))
+        #print('MI = ' + str(mutualInformation))
         fusedImage = ImageRegistration.fuseImage(image_moving, image_ref, H_mov2fix)
         window_title = 'moving-to-fixed image matches'
         cv2.namedWindow(window_title, cv2.WINDOW_NORMAL)
@@ -122,27 +131,17 @@ class ImageRegistrationWithMutualInformation(ImageRegistration):
         # image_ref_scaled = cv2.GaussianBlur(image_ref_scaled, (15, 15), 0)
         image_ref_scaled = image_ref_bw
         # print("size %s" % str(image_ref_scaled.shape))
-        if (self.DEBUG == True):
-            print("initialTransform = %s" % str(initialTransform))
-        transformAsVec = np.reshape(initialTransform, (1, 9))
-        transformAsVec = transformAsVec[0, :8]
-
-        if (add_noise == True):
-            noiseVec = np.random.normal(0, 1, (1, 8))
-            noisy_transformAsVec = transformAsVec + 0.15 * np.multiply(transformAsVec, noiseVec)
-        else:
-            noisy_transformAsVec = transformAsVec
-        # print("transformAsVec = %s" % str(transformAsVec))
 
         minimizationErrorFunction = lambda x: -self.calculateMutualInformation(image_moving_bw, image_ref_scaled, x)
         minimizationErrorFunction_df = NumericalDiff(minimizationErrorFunction, 8, 1, 'central')
         jacobianErrorFunction = lambda x: minimizationErrorFunction_df.jacobian(x)
         hessianErrorFunction = lambda x: minimizationErrorFunction_df.hessian(x)
         #minimize_method = 'Nelder-Mead'
-        minimize_method = 'Newton-CG'
-        #minimize_method = 'CG'
+        #minimize_method = 'Newton-CG'
+        minimize_method = 'CG'
         #minimize_method = 'SLSQP'
 
+        #hessianMethod = 'None'
         #hessianMethod = '3-point'
         hessianMethod = hessianErrorFunction
 
@@ -152,34 +151,37 @@ class ImageRegistrationWithMutualInformation(ImageRegistration):
 
         maximum_iterations = 1000
 
-        transform_bounds = [[-10, 10], [-10, 10], [-1000, 1000], [-10, 10], [-10, 10], [-1000, 1000], [-1, 1], [-1, 1]];
-        noisy_transformAsVec = scipy.optimize.fmin(func=minimizationErrorFunction, x0=noisy_transformAsVec, args=(), xtol=0.001,
-                                          ftol=None,
-                                          maxiter=self.maximum_iteration_number, maxfun=100, full_output=False,
-                                          disp=False,
-                                          retall=False,
-                                          callback=None, initial_simplex=None)
-        if False:
-            x_optimized = scipy.optimize.fmin(func=minimizationErrorFunction, x0=noisy_transformAsVec, args=(),
-                                              xtol=0.1,
-                                              ftol=0.1,
-                                              maxiter=self.maximum_iteration_number, maxfun=500, full_output=False,
-                                              disp=False,
-                                              retall=False,
-                                              callback=None, initial_simplex=None)
-        else:
-            optimized_result = scipy.optimize.minimize(fun=minimizationErrorFunction,
-                                                       x0=noisy_transformAsVec,
-                                                       method=minimize_method,
-                                                       jac=jacobianMethod,
-                                                       hess=hessianMethod, hessp=None, bounds=transform_bounds,
-                                                       constraints=(), tol=0.001,
-                                                       callback=None, options={'maxiter': maximum_iterations})
-            x_optimized = optimized_result.x
+        x_optimized = BFGS(minimizationErrorFunction, np.squeeze(np.asarray(initialTransform)), 100, plot=False)
+        # transform_bounds = [[-10, 10], [-10, 10], [-1000, 1000], [-10, 10], [-10, 10], [-1000, 1000], [-1, 1], [-1, 1]];
+        # noisy_transformAsVec = scipy.optimize.fmin(func=minimizationErrorFunction, x0=noisy_transformAsVec, args=(), xtol=0.5,
+        #                                   ftol=0.5,
+        #                                   maxiter=self.maximum_iteration_number, maxfun=100, full_output=False,
+        #                                   disp=False,
+        #                                   retall=False,
+        #                                   callback=None, initial_simplex=None)
+        #
+        # if False:
+        #     x_optimized = scipy.optimize.fmin(func=minimizationErrorFunction, x0=noisy_transformAsVec, args=(),
+        #                                       xtol=0.1,
+        #                                       ftol=0.1,
+        #                                       maxiter=self.maximum_iteration_number, maxfun=500, full_output=False,
+        #                                       disp=False,
+        #                                       retall=False,
+        #                                       callback=None, initial_simplex=None)
+        # else:
+        #     optimized_result = scipy.optimize.minimize(fun=minimizationErrorFunction,
+        #                                                x0=noisy_transformAsVec,
+        #                                                method=minimize_method,
+        #                                                jac=jacobianMethod,
+        #                                                hess=hessianMethod, hessp=None, bounds=transform_bounds,
+        #                                                constraints=(), tol=0.0001,
+        #                                                callback=None, options={'ftol': 0.001, 'maxiter': maximum_iterations})
+        #     x_optimized = optimized_result.x
 
         hessian = hessianMethod(x_optimized)
+        w, v = np.linalg.eig(hessian)
         print('x_optimized = ' + str(x_optimized))
-        print('Hessian = ' + str(hessian))
+        print('Hessian eigenvalues = ' + str(w))
         estTransformAsVec = np.append(x_optimized, [1.0], axis=0)
         Hest = np.reshape(estTransformAsVec, (3, 3))
         fused_image = ImageRegistration.fuseImage(image_moving_bw, image_ref, Hest)
@@ -230,7 +232,19 @@ if __name__ == '__main__':
     scale_matrix = np.array([[scale_factor, 0, 0], [0, scale_factor, 0], [0, 0, 1]])
     # initialGuess = np.matmul(np.matmul(np.linalg.inv(scale_matrix), initialGuess), scale_matrix)
     initialGuess = np.matmul(np.matmul(scale_matrix, initialGuess), np.linalg.inv(scale_matrix))
-    # initialGuess = np.matmul(scale_matrix, initialGuess)
-    # image_registration.registerImagePair(image_moving, image_ref=image_reference, initialTransform=initialGuess)
+    transformAsVec = np.squeeze(np.asarray(initialGuess.flatten()))
+
+    transformAsVec = transformAsVec[:8]
+
+    num_params = np.size(transformAsVec)
+
+    add_noise = True
+    if (add_noise == True):
+        noiseVec = np.random.normal(0, 1, (1, num_params))
+        noisy_transformAsVec = transformAsVec + 0.05 * np.multiply(transformAsVec, noiseVec)
+    else:
+        noisy_transformAsVec = transformAsVec
+    # print("transformAsVec = %s" % str(transformAsVec))
+
     image_registration.registerImagePair(image_moving_bw, image_ref=image_reference_bw,
-                                         initialTransform=initialGuess, add_noise=True)
+                                         initialTransform=transformAsVec, add_noise=True)
