@@ -79,7 +79,7 @@ if __name__ == '__main__':
         add_noise = True
         if (add_noise == True):
             noiseVec = np.random.normal(0, 1, num_params)
-            transformAsVec = transformAsVec + 0.8 * np.multiply(transformAsVec, noiseVec)
+            transformAsVec = transformAsVec + 0.08 * np.multiply(transformAsVec, noiseVec)
         else:
             transformAsVec = transformAsVec
 
