@@ -131,9 +131,9 @@ class ImageRegistrationWithMutualInformation(ImageRegistration):
         # image_ref_scaled = cv2.GaussianBlur(image_ref_scaled, (15, 15), 0)
         image_ref_scaled = image_ref_bw
         # print("size %s" % str(image_ref_scaled.shape))
-
+        num_params = np.size(initialTransform)
         minimizationErrorFunction = lambda x: -self.calculateMutualInformation(image_moving_bw, image_ref_scaled, x)
-        minimizationErrorFunction_df = NumericalDiff(minimizationErrorFunction, 8, 1, 'central')
+        minimizationErrorFunction_df = NumericalDiff(minimizationErrorFunction, num_params, 1, 'central')
         jacobianErrorFunction = lambda x: minimizationErrorFunction_df.jacobian(x)
         hessianErrorFunction = lambda x: minimizationErrorFunction_df.hessian(x)
         #minimize_method = 'Nelder-Mead'
@@ -182,7 +182,14 @@ class ImageRegistrationWithMutualInformation(ImageRegistration):
         w, v = np.linalg.eig(hessian)
         print('x_optimized = ' + str(x_optimized))
         print('Hessian eigenvalues = ' + str(w))
-        estTransformAsVec = np.append(x_optimized, [1.0], axis=0)
+
+        if np.size(x_optimized) == 8:
+            estTransformAsVec = np.append(x_optimized, [1.0], axis=0)
+        elif np.size(x_optimized) == 7:
+            estTransformAsVec = np.append(x_optimized, [0, 1.0], axis=0)
+        elif np.size(x_optimized) == 6:
+            estTransformAsVec = np.append(x_optimized, [0, 0, 1.0], axis=0)
+
         Hest = np.reshape(estTransformAsVec, (3, 3))
         fused_image = ImageRegistration.fuseImage(image_moving_bw, image_ref, Hest)
         print('Saving image ' + 'registration_result_image.png')
@@ -240,7 +247,7 @@ if __name__ == '__main__':
 
     add_noise = True
     if (add_noise == True):
-        noiseVec = np.random.normal(0, 1, (1, num_params))
+        noiseVec = np.random.normal(0, 1, num_params)
         noisy_transformAsVec = transformAsVec + 0.05 * np.multiply(transformAsVec, noiseVec)
     else:
         noisy_transformAsVec = transformAsVec

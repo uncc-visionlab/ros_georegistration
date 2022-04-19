@@ -50,7 +50,7 @@ if __name__ == '__main__':
         # image_reference = cv2.imread(img2_path, cv2.CV_LOAD_IMAGE_GRAYSCALE)
         image_moving = cv2.imread(image_moving_path)
         image_reference = cv2.imread(image_reference_path)
-        # image_moving = cv2.blur(image_moving, (40, 40))
+        image_moving = cv2.blur(image_moving, (10, 10))
         image_reference = cv2.blur(image_reference, (80, 80))
         scale_factor = 1.0 / 1.0
         image_moving = cv2.resize(image_moving,
@@ -72,14 +72,14 @@ if __name__ == '__main__':
         # initialGuess = np.matmul(scale_matrix, initialGuess)
         # image_registration.registerImagePair(image_moving, image_ref=image_reference, initialTransform=initialGuess)
         transformAsVec = np.squeeze(np.asarray(initialGuess.flatten()))
-        transformAsVec = transformAsVec[:8]
+        transformAsVec = transformAsVec[:6]
         #transformAsVec[2] = transformAsVec[2] + 15
         #transformAsVec[5] = transformAsVec[5] + 15
         num_params = np.size(transformAsVec)
-        add_noise = False
+        add_noise = True
         if (add_noise == True):
-            noiseVec = np.random.normal(0, 1, (1, num_params))
-            transformAsVec = transformAsVec + 0.15 * np.multiply(transformAsVec, noiseVec)
+            noiseVec = np.random.normal(0, 1, num_params)
+            transformAsVec = transformAsVec + 0.8 * np.multiply(transformAsVec, noiseVec)
         else:
             transformAsVec = transformAsVec
 
